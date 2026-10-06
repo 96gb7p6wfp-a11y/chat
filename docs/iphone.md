@@ -5,8 +5,10 @@ tap the Share button, and choose **Add to Home Screen**. If your iPhone offers
 an **Open as Web App** setting, leave it enabled. Launch Northstar from its new
 Home Screen icon for the standalone app experience.
 
-The production site must serve the app at its domain root (`/`) for the
-included manifest and service worker. A local development server is useful
+The production site can serve the app at its domain root (`/`) or a configured
+repository path such as `/chat/`. The build's `NORTHSTAR_BASE_PATH` must match
+that path so the manifest, icons, and service worker resolve correctly.
+A local development server is useful
 for development, but an iPhone needs a reachable HTTPS deployment to install
 the app and enable its offline worker. The worker is intended for production
 builds, not Vite's development server.

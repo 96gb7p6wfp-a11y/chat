@@ -51,26 +51,25 @@ Deployment credentials, if your chosen host requires them, belong in that
 host's secure settings. Never put them into the app or send their values
 in chat.
 
-## Cloud access required to finish publication here
+## Current publication status
 
-Native Git access to the existing repository works. At preparation time,
-the environment's network policy blocked requests to `api.github.com`, so
-repository permissions, Pages settings, and deployment status could not be
-checked through the GitHub API.
+GitHub API access and source pushing now work. The app was pushed to `main`
+and its first publishing workflow started. That run stopped while reading
+Pages metadata because no Pages site exists yet. Creating the site through
+the available integration returns **HTTP 403: Resource not accessible by
+integration**; repository source permissions do not grant that integration
+Pages activation permission.
 
-The environment configuration draft now requests these destinations:
+The repository owner can finish the one-time configuration at
+[Settings → Pages](https://github.com/96gb7p6wfp-a11y/chat/settings/pages):
+select **Source → GitHub Actions**. After saving, rerun the failed publishing
+workflow or use its **Run workflow** button. No credentials need to be
+shared. Keep the repository's existing public visibility.
 
-- `api.github.com` for the existing GitHub API operation.
-- `96gb7p6wfp-a11y.github.io` for validating this repository's hosted site.
+The environment draft retains `api.github.com` and
+`96gb7p6wfp-a11y.github.io` alongside the package-manager network preset.
+Draft saving does not apply or publish environment configuration. Website
+publication is a separate operation.
 
-The existing package-manager network preset is preserved. Saving that draft
-does not update the running proxy policy. Save the network changes through
-environment settings, then the affected read-only operation can be retried.
-No new GitHub token has been requested; existing injected authentication
-must be tested on the newly reachable API before deciding anything else is
-missing.
-
-The workflow has been prepared, not run. A public website or deployment URL
-must only be reported after an actual successful deployment and functional
-request. No source push or Pages settings change has been performed during
-this preparation.
+A public app URL will be recorded only after a successful deployment and
+functional HTTPS validation. There is no verified live website yet.

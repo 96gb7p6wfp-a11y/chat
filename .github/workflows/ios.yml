@@ -89,6 +89,52 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             test 2>&1 | tee test-results/xcodebuild.log
 
+      - name: Annotate native build or test failures
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          log = Path('test-results/xcodebuild.log')
+          if not log.is_file():
+              print('No xcodebuild log was produced.')
+              raise SystemExit(0)
+
+          def escape(value):
+              return value.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+
+          source_error = re.compile(r'^(.+\.swift):(\d+)(?::(\d+))?: error: (.+)$')
+          failure = re.compile(r'error:|Test Case .+ failed|Testing failed:|\*\* TEST (?:FAILED|BUILD FAILED) \*\*')
+          seen = set()
+          emitted = 0
+          for raw in log.read_text(errors='replace').splitlines():
+              line = raw.strip()
+              if not failure.search(line) or line in seen:
+                  continue
+              seen.add(line)
+              match = source_error.match(line)
+              if match:
+                  source, row, column, message = match.groups()
+                  path = Path(source)
+                  if path.is_absolute():
+                      try:
+                          path = path.relative_to(Path.cwd().parent)
+                      except ValueError:
+                          path = Path(path.name)
+                  properties = f'file={escape(str(path)).replace(",", "%2C").replace(":", "%3A")},line={row}'
+                  if column:
+                      properties += f',col={column}'
+                  print(f'::error {properties}::{escape(message[:2000])}')
+              else:
+                  print(f'::error::{escape(line[:2000])}')
+              emitted += 1
+              if emitted == 30:
+                  break
+          if not emitted:
+              print('No compiler or test error lines matched; inspect the uploaded xcodebuild log.')
+          PY
+
       - name: Upload available test results and build log
         if: always()
         uses: actions/upload-artifact@v7

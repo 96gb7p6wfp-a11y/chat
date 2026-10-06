@@ -27,17 +27,19 @@ cloud sync, analytics, or automatic admissions prediction. Keep backups;
 deleting the app or clearing browser storage can remove your records.
 
 To test on an iPhone, the browser prototype needs **HTTPS hosting**. The
-build output in `dist/` is a static website: upload its contents to a static
-host at the domain root, open that hosted URL in Safari, and choose
-**Share → Add to Home Screen**. The cloud workspace has not deployed a
-public website. [iPhone instructions](docs/iphone.md) explain installation
-and data storage. A local development server address is not a usable
-iPhone installation link.
+source is on GitHub `main`, and the Pages publishing workflow is ready.
+The first run stopped because Pages is not enabled. The available GitHub
+integration can push source but cannot activate Pages (HTTP 403). The
+repository owner must select **Settings → Pages → Source → GitHub Actions**;
+then rerun the publishing workflow. A public website has not been verified
+yet. [iPhone instructions](docs/iphone.md) explain installation and data
+storage. A local development server address is not an iPhone installation
+link.
 
 [Hosting instructions](docs/hosting.md) and a GitHub Pages workflow are
 included. Root hosting and repository paths such as `/chat/` are supported.
-The cloud environment must reach GitHub's API before it can inspect Pages
-settings or confirm publication.
+GitHub API access now works. Initial Pages activation requires the owner's
+settings change; no new credentials need to be shared.
 
 ## Develop the browser prototype
 
@@ -88,8 +90,9 @@ A Mac or a macOS build service, suitable Apple developer signing, and the
 Family Controls capability are needed for an installable native build.
 TestFlight/App Store distribution also needs Apple's entitlement approval.
 The included GitHub Actions workflow prepares unsigned simulator builds and
-XCTest when the source is pushed to GitHub; that workflow has not run here
-and its unsigned artifacts cannot be installed on an iPhone.
+XCTest when the source is pushed to GitHub. Its first run failed during
+`xcodebuild`; a diagnostic rerun is being prepared. No native build or test
+pass is claimed. Unsigned artifacts cannot be installed on an iPhone.
 
 Without a native build, use Apple's **Settings → Screen Time → App Limits**
 for real restrictions and this prototype for planning. The browser cannot
@@ -100,7 +103,8 @@ observe or block TikTok, Instagram, or Snapchat.
 - Browser production build and 15 JavaScript tests passed.
 - 13 Chromium browser cases passed, including a 390 × 844 mobile layout.
 - 5 root/subpath hosting checks passed, including offline fonts and isolated
-  service-worker caches. The Pages workflow was reviewed, but has not run.
+  service-worker caches. The first Pages workflow run stopped at the missing
+  repository Pages setting, before build or deployment.
 - Native project metadata, plists, entitlements, and icon passed validation.
 - 11 native XCTest cases are written; Xcode execution and physical-device
   Screen Time validation remain outstanding.
