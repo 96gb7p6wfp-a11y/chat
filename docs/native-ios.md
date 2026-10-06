@@ -1,6 +1,6 @@
 # Native iPhone Screen Time implementation and validation
 
-The native source in `native/` implements the planner's Screen Time integration using Apple's frameworks. It has not been compiled with the iOS SDK or tested on a physical iPhone in this Linux environment. The separate web companion cannot measure time spent in TikTok, Instagram, or Snapchat, restrict those apps, or place a countdown over them; its focus timer measures only a session started inside the planner.
+The native source in `native/` implements the planner's Screen Time integration using Apple's frameworks. Xcode project generation, an unsigned iPhone simulator build, and XCTest passed in [GitHub macOS CI](https://github.com/96gb7p6wfp-a11y/chat/actions/runs/37534343286) on commit `32351ac`. Signing and physical-iPhone Screen Time validation remain outstanding. The separate web companion cannot measure time spent in TikTok, Instagram, or Snapchat, restrict those apps, or place a countdown over them; its focus timer measures only a session started inside the planner.
 
 For immediate limits, configure the iPhone's built-in **Settings → Screen Time → App Limits**. Apple support: <https://support.apple.com/guide/iphone/set-up-screen-time-for-yourself-iphb0c7313c9/ios>. Screen Time and this planner can be used together.
 

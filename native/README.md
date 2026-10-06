@@ -110,11 +110,13 @@ runs an unsigned build and XCTest. Test results and the build log are saved
 as an Actions artifact when they are produced, including on a failed test
 run.
 
-The source has been pushed and the first macOS workflow reached `xcodebuild`
-but failed before test completion. A failure-only step now reports bounded
-compiler/test diagnostics as GitHub check annotations for the next run.
-Native compilation and XCTest have not passed yet. Running the workflow
-may use your account's Actions allowance.
+Native project generation, unsigned simulator compilation, and XCTest
+passed on commit `32351ac` in
+[this macOS CI run](https://github.com/96gb7p6wfp-a11y/chat/actions/runs/37534343286).
+Exact Xcode version, simulator name, and executed test count have not been
+verified through the accessible log routes. A failure-only step reports
+bounded compiler/test diagnostics as GitHub check annotations. Running the
+workflow may use your account's Actions allowance.
 
 The CI result is a simulator test bundle and log. It has no distribution
 signing, provisioning profile, or deployment step, and its unsigned outputs

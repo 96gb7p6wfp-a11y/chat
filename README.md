@@ -7,8 +7,9 @@ and university entry dates remain undecided. No grades or achievements are
 invented.
 
 The **browser planning prototype** is built and tested. The **native iPhone
-project** includes Apple Screen Time integration source, but it has not been
-compiled, signed, or tested on an iPhone in this Linux workspace.
+project** includes Apple Screen Time integration and has passed an unsigned
+simulator build and XCTest on GitHub's macOS runner. Apple signing and
+physical-iPhone Screen Time validation remain outstanding.
 
 ## Try the planning workflow
 
@@ -89,10 +90,10 @@ be checked on a physical device.
 A Mac or a macOS build service, suitable Apple developer signing, and the
 Family Controls capability are needed for an installable native build.
 TestFlight/App Store distribution also needs Apple's entitlement approval.
-The included GitHub Actions workflow prepares unsigned simulator builds and
-XCTest when the source is pushed to GitHub. Its first run failed during
-`xcodebuild`; a diagnostic rerun is being prepared. No native build or test
-pass is claimed. Unsigned artifacts cannot be installed on an iPhone.
+The included GitHub Actions workflow runs unsigned simulator builds and
+XCTest when the source is pushed to GitHub. The native project passed
+[the macOS CI run](https://github.com/96gb7p6wfp-a11y/chat/actions/runs/37534343286)
+on commit `32351ac`. Unsigned artifacts cannot be installed on an iPhone.
 
 Without a native build, use Apple's **Settings → Screen Time → App Limits**
 for real restrictions and this prototype for planning. The browser cannot
@@ -106,8 +107,9 @@ observe or block TikTok, Instagram, or Snapchat.
   service-worker caches. The first Pages workflow run stopped at the missing
   repository Pages setting, before build or deployment.
 - Native project metadata, plists, entitlements, and icon passed validation.
-- 11 native XCTest cases are written; Xcode execution and physical-device
-  Screen Time validation remain outstanding.
+- Native Xcode project generation, unsigned simulator build, and XCTest
+  passed in macOS CI. Physical-device Screen Time validation and signing
+  remain outstanding.
 
 Official university links are included in the pathway. Current admissions
 requirements, deadlines, fees, and financial aid must be checked for your
