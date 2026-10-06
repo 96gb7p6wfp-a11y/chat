@@ -151,10 +151,10 @@ final class ScreenTimeShared {
         try FileManager.default.setAttributes(
             [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
             ofItemAtPath: lockURL.path)
-        guard Darwin.flock(descriptor, LOCK_EX) == 0 else {
+        guard NorthstarFlock(descriptor, LOCK_EX) == 0 else {
             throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
         }
-        defer { _ = Darwin.flock(descriptor, LOCK_UN) }
+        defer { _ = NorthstarFlock(descriptor, LOCK_UN) }
         return try operation()
     }
 

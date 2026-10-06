@@ -33,8 +33,8 @@ def main():
     require("northstar-screen-time.lock" in shared and "northstar-screen-time.json" in shared,
             "A stable lock file must be separate from the atomically replaced state file")
     locking = function(shared, "withExclusiveLock")
-    require("Darwin.flock(descriptor, LOCK_EX)" in locking, "Missing process-safe exclusive lock")
-    require("Darwin.flock(descriptor, LOCK_UN)" in locking and "Darwin.close(descriptor)" in locking,
+    require("NorthstarFlock(descriptor, LOCK_EX)" in locking, "Missing process-safe exclusive lock")
+    require("NorthstarFlock(descriptor, LOCK_UN)" in locking and "Darwin.close(descriptor)" in locking,
             "Lock and descriptor must be released")
     require(locking.index("LOCK_EX") < locking.index("operation()"), "State operation must follow lock acquisition")
     require("Data(contentsOf: stateURL)" in function(shared, "loadLocked"), "Read current persisted data per operation")

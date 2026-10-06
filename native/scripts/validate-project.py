@@ -113,6 +113,12 @@ def main() -> None:
         entitlements = plistlib.loads(local_path(settings["CODE_SIGN_ENTITLEMENTS"]).read_bytes())
         require(entitlements.get("com.apple.security.application-groups") == [GROUP], f"Wrong App Group in {name}")
         require(entitlements.get("com.apple.developer.family-controls") is True, f"Family Controls missing in {name}")
+        require(settings.get("SWIFT_OBJC_BRIDGING_HEADER") == "Shared/NorthstarFileLock.h",
+                f"POSIX file-lock bridging header missing in {name}")
+        local_path(settings["SWIFT_OBJC_BRIDGING_HEADER"])
+        shared_roots = [entry if isinstance(entry, str) else entry["path"] for entry in target.get("sources", [])]
+        require("Shared" in shared_roots, f"C file-lock wrapper source root missing in {name}")
+        require(local_path("Shared/NorthstarFileLock.c").suffix == ".c", "Missing C file-lock wrapper")
         sources = swift_sources(target)
         all_sources[name] = sources
         require(ROOT / "Shared/ScreenTimeShared.swift" in sources, f"Shared Screen Time source missing in {name}")
@@ -132,6 +138,12 @@ def main() -> None:
     require(any(re.search(r"@main\s+(?:@\w+\s+)?struct\s+NorthstarApp\b", source.read_text()) for source in host_sources),
             "SwiftUI host entry point is missing")
     require(GROUP in (ROOT / "Shared/ScreenTimeShared.swift").read_text(), "Shared source and App Group entitlements differ")
+    lock_header = local_path("Shared/NorthstarFileLock.h").read_text()
+    lock_source = local_path("Shared/NorthstarFileLock.c").read_text()
+    require("int NorthstarFlock(int descriptor, int operation);" in lock_header,
+            "File-lock function declaration is missing")
+    require('#include <sys/file.h>' in lock_source and 'return flock(descriptor, operation);' in lock_source,
+            "C wrapper must call the verified POSIX flock implementation")
     embedded = {dep["target"] for dep in targets["Northstar"]["dependencies"] if dep.get("embed") is True}
     require(embedded == set(EXPECTED) - {"Northstar"}, "Host must embed every extension")
     tests = targets["NorthstarTests"]

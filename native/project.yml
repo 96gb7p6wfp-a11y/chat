@@ -31,6 +31,7 @@
           "PRODUCT_BUNDLE_IDENTIFIER": "com.northstar.planner",
           "INFOPLIST_FILE": "Northstar/Info.plist",
           "CODE_SIGN_ENTITLEMENTS": "Config/Northstar.entitlements",
+          "SWIFT_OBJC_BRIDGING_HEADER": "Shared/NorthstarFileLock.h",
           "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
           "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
           "SUPPORTS_MACCATALYST": "NO"
@@ -54,6 +55,7 @@
           "PRODUCT_BUNDLE_IDENTIFIER": "com.northstar.planner.monitor",
           "INFOPLIST_FILE": "MonitorExtension/Info.plist",
           "CODE_SIGN_ENTITLEMENTS": "Config/MonitorExtension.entitlements",
+          "SWIFT_OBJC_BRIDGING_HEADER": "Shared/NorthstarFileLock.h",
           "APPLICATION_EXTENSION_API_ONLY": "YES",
           "SKIP_INSTALL": "YES"
         }
@@ -71,6 +73,7 @@
           "PRODUCT_BUNDLE_IDENTIFIER": "com.northstar.planner.shieldconfiguration",
           "INFOPLIST_FILE": "ShieldConfigurationExtension/Info.plist",
           "CODE_SIGN_ENTITLEMENTS": "Config/ShieldConfigurationExtension.entitlements",
+          "SWIFT_OBJC_BRIDGING_HEADER": "Shared/NorthstarFileLock.h",
           "APPLICATION_EXTENSION_API_ONLY": "YES",
           "SKIP_INSTALL": "YES"
         }
@@ -88,6 +91,7 @@
           "PRODUCT_BUNDLE_IDENTIFIER": "com.northstar.planner.shieldaction",
           "INFOPLIST_FILE": "ShieldActionExtension/Info.plist",
           "CODE_SIGN_ENTITLEMENTS": "Config/ShieldActionExtension.entitlements",
+          "SWIFT_OBJC_BRIDGING_HEADER": "Shared/NorthstarFileLock.h",
           "APPLICATION_EXTENSION_API_ONLY": "YES",
           "SKIP_INSTALL": "YES"
         }
