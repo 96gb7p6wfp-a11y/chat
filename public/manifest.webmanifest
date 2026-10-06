@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "Northstar",
+  "short_name": "Northstar",
+  "description": "A daily plan, a clear overview, and a thoughtful path toward your college goals.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f6f2",
+  "theme_color": "#f7f6f2",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

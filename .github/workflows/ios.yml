@@ -1,0 +1,99 @@
+name: Native iOS build and tests
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'native/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator-tests:
+    name: Unsigned simulator build and XCTest
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: native
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Validate native source configuration
+        run: python3 scripts/validate-project.py
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Select an available iPhone simulator
+        id: simulator
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          inventory = json.loads(subprocess.check_output(
+              ['xcrun', 'simctl', 'list', 'devices', 'available', '--json'],
+              text=True,
+          ))
+          candidates = []
+          for runtime, devices in inventory.get('devices', {}).items():
+              prefix = 'com.apple.CoreSimulator.SimRuntime.iOS-'
+              if not runtime.startswith(prefix):
+                  continue
+              version = tuple(int(part) for part in runtime[len(prefix):].split('-'))
+              for device in devices:
+                  if device.get('isAvailable') and device.get('name', '').startswith('iPhone'):
+                      candidates.append((version, device.get('state') == 'Booted', device['name'], runtime, device['udid']))
+          if not candidates:
+              sys.exit('No available iPhone simulator is installed on this macOS runner.')
+          _, _, name, runtime, udid = max(candidates)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'udid={udid}\n')
+          print(f'Selected {name} ({runtime}), simulator {udid}.')
+          PY
+
+      - name: Build and run planner tests without signing
+        env:
+          NORTHSTAR_SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          mkdir -p test-results
+          xcodebuild \
+            -project Northstar.xcodeproj \
+            -scheme Northstar \
+            -destination "platform=iOS Simulator,id=${NORTHSTAR_SIMULATOR_UDID}" \
+            -resultBundlePath test-results/ios.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            test 2>&1 | tee test-results/xcodebuild.log
+
+      - name: Upload available test results and build log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: northstar-ios-test-results
+          path: native/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
