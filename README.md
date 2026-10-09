@@ -1,50 +1,96 @@
 # Northstar
 
-A daily compass for stronger grades, English/German practice, confidence,
-and a clearer college pathway. The starting profile reflects Grade 12 at a
-public German Gymnasium and **Abitur completion in summer 2028**. Application
-and university entry dates remain undecided. No grades or achievements are
-invented.
+An iPhone-first academic and university preparation coach. Open **Today** to
+see a small set of concrete actions, why they matter, and how they fit your
+available time. The starting direction is Q1 at a Gymnasium in Hessen,
+Mathematics and Physics Leistungskurse, Abitur in 2028, and parallel USA and
+Germany university pathways.
 
-The **browser planning prototype** is built and tested. The **native iPhone
-project** includes Apple Screen Time integration and has passed an unsigned
-simulator build and XCTest on GitHub's macOS runner. Apple signing and
-physical-iPhone Screen Time validation remain outstanding.
+The current product is the React web app. This development pass focuses on
+the complete local planning workflow; publishing and native distribution
+are outside its scope.
 
-## Try the planning workflow
+## Use the app
 
-The prototype includes:
+The four main screens are:
 
-- Six balanced, varied daily steps, with an editable time budget.
-- Custom tasks, date selection, completion history, and college milestones.
-- English/German practice and manageable confidence exercises.
-- German upper-secondary grade records using 0–15 points.
-- Today, monthly, and overall progress, with a reflection journal.
-- JSON backups and offline access after the first production visit.
-- A voluntary social-break timer and ten-second reflection preview.
+- **Today:** usually 3–5 priorities with an exact action, estimated minutes,
+  a short reason and completion controls. Tap a task for its linked goal,
+  study blocks, saved work and optional focus session. Skip for today keeps
+  your notes and lets the planner reconsider what fits.
+  Very short days have fewer actions; zero-minute days can be rest days.
+- **Plan:** the week ahead, year/semester/month/week priorities, subject-specific
+  exam revision, a shared events and deadlines timeline, USA/Germany roadmaps,
+  and editable study allowances and fixed activities.
+- **Progress:** weekly completion, estimated task time, separately measured
+  focus time and session history, consistency, written/oral grades, exam
+  revision progress, linked roadmap action progress, confirmed milestones,
+  and saved weekly reviews.
+- **Profile:** editable goals, subjects and grades, activities, universities,
+  a Timetable tab for study allowances and commitments, and settings with
+  theme and JSON backups.
 
-Your data stays in the current browser or native app. There is no login,
-cloud sync, analytics, or automatic admissions prediction. Keep backups;
-deleting the app or clearing browser storage can remove your records.
+A four-step setup asks for direction, starting grades and language levels,
+weekly availability and activities, then upcoming exams. Steps can be skipped
+and edited later. A fresh start uses the supplied Q1 profile: Mathematics
+written 6/oral 11, English oral 7, History oral 8, Computer Science oral 10,
+and Politics/Economics oral 9. Other grades and language levels remain unknown.
+Volleyball, restaurant management, marketing and internships have editable
+activity records without invented achievements, dates or hours. No exams or
+completed history are added. Tuesday/Friday volleyball times of 18:30–20:30
+and the weekly study allowances are editable starting estimates.
 
-To test on an iPhone, the browser prototype needs **HTTPS hosting**. The
-source is on GitHub `main`, and the Pages publishing workflow is ready.
-The first run stopped because Pages is not enabled. The available GitHub
-integration can push source but cannot activate Pages (HTTP 403). The
-repository owner must select **Settings → Pages → Source → GitHub Actions**;
-then rerun the publishing workflow. A public website has not been verified
-yet. [iPhone instructions](docs/iphone.md) explain installation and data
-storage. A local development server address is not an iPhone installation
-link.
+The core is a personal university roadmap with concrete next actions. The app
+connects the long-term direction to year, semester, month and week priorities,
+then selects today's actions using approaching exams, written/oral grade gaps,
+weekly review focus, language goals, saved deadlines and roadmap milestones.
+USA and Germany have distinct requirements and timelines; the default US
+application season begins before summer 2028 Abitur. Preparing a milestone
+and confirming that it was actually achieved are tracked separately. Known
+grades, weak topics, language baselines and activity details satisfy their
+matching setup actions so the planner does not repeatedly ask for data
+already entered.
 
-[Hosting instructions](docs/hosting.md) and a GitHub Pages workflow are
-included. Root hosting and repository paths such as `/chat/` are supported.
-GitHub API access now works. Initial Pages activation requires the owner's
-settings change; no new credentials need to be shared.
+The planner fits actions into free study windows around fixed activities.
+It gives short days a smaller plan and longer days deeper work while keeping
+at most five actions. Missed generated tasks are reconsidered rather than
+copied into a growing backlog. Skipped actions remain available under
+**Skipped today**, including saved drafts. A shorter day resizes started work;
+drafts that cannot fit stay under **Saved for later** and return when there is
+room. Started work is retained when
+priorities change.
+Completed work stays recorded and completing an action does not refill
+today with more work. Previous days preserve their saved tasks; changes
+to grades or availability do not rewrite your history. A weekly review can
+reserve a 20% time buffer or use spare capacity for deeper practice next week.
+See [the coaching model](docs/coaching-engine.md) for
+the rules and data architecture.
 
-## Develop the browser prototype
+Plan → **Events** combines school exams, saved test dates, university deadlines,
+internships, projects and other milestones. Exams, test plans and universities
+keep their original records; custom events can be added and edited in the
+timeline. Each dated preparation plan uses the event type and time remaining.
+Tests under consideration create a requirements decision rather than assuming
+you need to prepare or book a test. Occasional activity reminders help you
+record new responsibilities and real impact.
 
-Use Node.js 24 (validated here with 24.19.0). From this repository root:
+Task details offer optional writing and vocabulary practice, automatically
+saved drafts and self-review checks. These aids support the daily plan;
+they do not assess your work. Use teacher feedback and current class or
+official test materials for exam-specific preparation.
+
+Open a task and start a **5–180 minute focus session** when you want to measure
+time. Pause before a break, resume later, and finish to save the elapsed work.
+The active session survives a reload and uses timestamps rather than counting
+browser ticks. It keeps running while the app is closed or the phone sleeps,
+up to the chosen session limit; the app saves a finished session when it is
+active again. Saving time does not mark a task complete. Progress keeps timed
+study separate from task estimates and lets you remove an accidental log
+without undoing the task.
+
+## Develop and verify
+
+Use Node.js 24. From this repository root:
 
 ```sh
 npm ci --cache /workspace/.cache/npm --no-audit --no-fund
@@ -53,64 +99,66 @@ npm run build
 npm run dev -- --port 5173 --strictPort
 ```
 
-For production smoke checks, start the preview in one terminal and run the
-browser suite in another:
+For the production browser checks, start the built app in one terminal:
 
 ```sh
-npm run preview -- --port 4173 --strictPort
-python3 tests/browser_smoke.py --url http://127.0.0.1:4173
+npm run preview -- --port 4175 --strictPort
 ```
 
-To build and check both root hosting and the `/chat/` path without changing
-the main `dist` directory:
+Then run the suite in another terminal:
 
 ```sh
-python3 tests/hosting_smoke.py
+python3 tests/browser_smoke.py --url http://127.0.0.1:4175 --production
 ```
 
-The smoke suite requires Python Playwright and Chromium. Both are available
-in this cloud workspace. It exercises the actual UI, persistence, grade
-records, backups, reflection gate, mobile layout, and offline fonts/assets.
-It does not validate Mobile Safari or native Screen Time behavior.
+The suite requires Python Playwright and Chromium. It exercises real setup,
+plan generation, task completion and notes, exam creation, grades,
+weekly reviews, linked roadmaps, unified events and profile editing, backups,
+persistence, mobile layout, dark mode, focus sessions and self-review, and the
+production offline shell. Generated results and screenshots are written to
+the ignored `test-results/` directory. Chromium
+with a mobile viewport does not replace testing on an actual iPhone in
+Mobile Safari or Home Screen mode.
 
-## Native iPhone app
+## Data and limits
 
-[Native build instructions](native/README.md) cover XcodeGen, signing,
-simulator tests, and physical-device checks. The SwiftUI app includes the
-planner, grade tracking, journal, profile, backups, and three Screen Time
-extensions. Each selected app has its own 30-minute reminder and 60-minute
-shield. The host app contains a persisted ten-second pause and three
-questions before a deliberate ten-minute access break.
+The app works without an account or paid backend. Data is saved in this
+browser's local storage; export a JSON backup before moving devices or
+clearing browser data. The storage adapter migrates the previous Northstar
+format, validates backups before replacing data, and preserves an untouched
+recovery copy when saved data cannot be read. If browser storage is
+unavailable, the app shows a warning rather than claiming changes are saved.
+The recovery notice lets you download the original data. An unexpected screen
+error offers a reload and a saved-data download without clearing your plan.
 
-The system shield instructs you to open Northstar yourself. Apple does not
-allow an arbitrary countdown and questionnaire to be drawn over another
-app. iOS usage callbacks can arrive late, so exact interruption timing must
-be checked on a physical device.
+Recommendations are explainable rules, not an LLM or an admissions
+prediction. Estimated study time sums the durations of completed tasks;
+timed study sums saved focus intervals and excludes pauses. The timer records
+elapsed time you choose to track, not attention or learning quality. Revision
+progress still uses completed preparation estimates, not timer logs or
+measured mastery. Subject averages guide planning and are not an official
+Hessen course grade or final Abitur calculation.
 
-A Mac or a macOS build service, suitable Apple developer signing, and the
-Family Controls capability are needed for an installable native build.
-TestFlight/App Store distribution also needs Apple's entitlement approval.
-The included GitHub Actions workflow runs unsigned simulator builds and
-XCTest when the source is pushed to GitHub. The native project passed
-[the macOS CI run](https://github.com/96gb7p6wfp-a11y/chat/actions/runs/37534343286)
-on commit `32351ac`. Unsigned artifacts cannot be installed on an iPhone.
+Roadmap dates are planning estimates; overlapping school and application
+phases are shown in date order. Saved deadlines are supplied by the user,
+not verified automatically by Northstar. University requirements, accepted
+English certificates, costs, application routes and deadlines need
+programme-specific verification from official sources. UCLA and UC Berkeley
+currently do not consider SAT/ACT for admission; other universities can have
+different policies. Graduation in 2028 does not establish your application
+or entry year.
 
-Without a native build, use Apple's **Settings → Screen Time → App Limits**
-for real restrictions and this prototype for planning. The browser cannot
-observe or block TikTok, Instagram, or Snapchat.
+Light, dark and device themes, safe-area spacing, touch navigation, local
+fonts and a production offline app shell are included. Account sync,
+external calendar integration, automatic admissions-data updates, essay
+grading and cross-app Screen Time controls are not implemented in this web
+coach. A browser cannot observe or block TikTok, Instagram or Snapchat.
 
-## Validation status
+## Retained native source
 
-- Browser production build and 15 JavaScript tests passed.
-- 13 Chromium browser cases passed, including a 390 × 844 mobile layout.
-- 5 root/subpath hosting checks passed, including offline fonts and isolated
-  service-worker caches. The first Pages workflow run stopped at the missing
-  repository Pages setting, before build or deployment.
-- Native project metadata, plists, entitlements, and icon passed validation.
-- Native Xcode project generation, unsigned simulator build, and XCTest
-  passed in macOS CI. Physical-device Screen Time validation and signing
-  remain outstanding.
-
-Official university links are included in the pathway. Current admissions
-requirements, deadlines, fees, and financial aid must be checked for your
-applicant type and intended entry year.
+`native/` contains the earlier independent SwiftUI planner and Screen Time
+extension project. Its unsigned simulator build and tests previously passed
+in macOS CI. The new coaching engine, onboarding and four-tab web experience
+have not been ported to that project, and physical-iPhone Screen Time
+behaviour has not been verified. Native work is not part of this development
+pass.

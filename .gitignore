@@ -6,6 +6,8 @@ dist/
 .env.*
 !.env.example
 test-results/
+__pycache__/
+*.py[cod]
 native/*.xcodeproj/
 native/*.xcworkspace/
 .build/

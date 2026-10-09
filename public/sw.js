@@ -3,7 +3,7 @@ const SHELL_URL = new URL(self.registration.scope);
 const SHELL_PATH = SHELL_URL.pathname;
 // CacheStorage is shared by every app on this origin; keep each base isolated.
 const CACHE_PREFIX = `northstar-shell-${encodeURIComponent(SHELL_PATH)}-`;
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v5`;
 const PUBLIC_FILES = [
   SHELL_PATH,
   ...['manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png']
@@ -112,7 +112,9 @@ self.addEventListener('fetch', (event) => {
   if (!isPublicAsset(url)) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(request);
+    // Versioned public assets have the same bytes for this origin. A server's
+    // Vary: Origin must not make a crossorigin script miss its precached copy.
+    const cached = await cache.match(request, { ignoreVary: true });
     if (cached) return cached;
     const response = await fetch(request);
     await saveResponse(request, response.clone());
