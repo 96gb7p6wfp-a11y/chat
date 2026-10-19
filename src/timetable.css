@@ -1,0 +1,26 @@
+.timetable-view { min-width:0; }
+.plan-screen > .tabs-scroll .segmented { flex:0 0 auto; }
+.plan-screen > .tabs-scroll .segmented > button { flex:0 0 auto;min-width:max-content; }
+.roadmap-phase-summary { cursor:pointer;list-style:none;min-height:44px; }
+.roadmap-phase-summary::-webkit-details-marker { display:none; }
+.roadmap-phase-summary h2 { margin:7px 0; }
+.roadmap-phase[open] > .roadmap-phase-summary { margin-bottom:12px; }
+.roadmap-phase:not([open]) .roadmap-phase-summary .row::after { content:'›';font-size:1.4rem;color:var(--muted); }
+.timetable-view .week-heading { text-align:center; }
+.timetable-view .week-heading h2 { font-size:1rem; }
+.lesson-day { padding-top:8px;padding-bottom:8px; }
+.lesson-day .section-heading { margin-top:12px; }
+.lesson-row { display:flex;align-items:center;gap:12px;padding:14px 0;min-width:0; }
+.lesson-row + .lesson-row { border-top:1px solid var(--line); }
+.lesson-row .grow { min-width:0; }
+.lesson-row strong { overflow-wrap:anywhere; }
+.lesson-row p { margin:4px 0 0;overflow-wrap:anywhere; }
+.lesson-time { display:flex;flex-direction:column;gap:4px;flex-shrink:0;font-size:0.8rem;line-height:1.4;font-variant-numeric:tabular-nums; }
+.lesson-time span { color:var(--muted); }
+.timetable-week { display:flex;flex-direction:column;gap:12px; }
+.timetable-cycle form { padding-top:12px; }
+.timetable-edit-row { display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--line); }
+.timetable-edit-row .lesson-row { flex:1;min-width:0; }
+.timetable-view > .section-heading { flex-wrap:wrap;gap:12px; }
+@media (min-width:760px) { .timetable-week { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start; } }
+@media (prefers-reduced-motion:reduce) { .timetable-view * { scroll-behavior:auto; } }

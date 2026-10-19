@@ -52,7 +52,7 @@ export function Modal({ title, onClose, children, wide = false, className = '' }
   }, []);
   return <div className="modal-backdrop" ref={backdropRef} onClick={event => { if (event.target === event.currentTarget) onClose?.(); }}>
     <section className={`modal ${wide ? 'modal-wide' : ''} ${className}`} ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <header className="modal-header"><h2 id={titleId}>{title}</h2>{onClose && <button className="icon-button" type="button" aria-label="Close dialog" onClick={onClose}><X size={21}/></button>}</header>
+      <header className="modal-header"><h2 id={titleId}>{title}</h2>{onClose && <button className="icon-button" type="button" aria-label="Dialog schließen" onClick={onClose}><X size={21}/></button>}</header>
       <div className="modal-body">{children}</div>
     </section>
   </div>;
@@ -74,8 +74,8 @@ export function EmptyState({ icon: Icon, title, description, action, children })
 }
 
 export function formatDate(dateKey, options = { day: 'numeric', month: 'short' }) {
-  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return 'No date set';
-  return new Intl.DateTimeFormat('en-GB', options).format(new Date(`${dateKey}T12:00:00`));
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return 'Datum offen';
+  return new Intl.DateTimeFormat('de-DE', options).format(new Date(`${dateKey}T12:00:00`));
 }
 
 export function formatMinutes(value) {

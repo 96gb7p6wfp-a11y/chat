@@ -6,6 +6,12 @@
 import { createStudyState, getStudyStats, normalizeStudy } from './study.js';
 import { getEventCandidates, getEventPlan, normalizeEvents } from './events.js';
 import { getRoadmap as buildRoadmap, getRoadmapPriorities, taskCategoryForMilestone } from './roadmap.js';
+import { calculateSubject, normalizeAcademicGrade, normalizeGrading } from './grades.js';
+import { getSubjectPriorities } from './recommendations.js';
+import { normalizeLessons, lessonBlocks } from './timetable.js';
+import { normalizeIELTS, getIELTSCandidates, getIELTSSummary } from './ielts.js';
+import { normalizeLearning, getLearningReviews, getTaskLearningMetadata } from './guided-learning.js';
+export { getSubjectPriorities } from './recommendations.js';
 
 const CATEGORIES = ['academics', 'language', 'university', 'activity', 'review'];
 const SUBJECTS = [
@@ -18,7 +24,7 @@ const SUBJECTS = [
 const DEFAULT_PROFILE = {
   name: '', schoolYear: 'Q1', schoolSystem: 'Hessen · Gymnasium', graduationYear: '2028',
   universityStartYear: '', applicationYear: '', pathways: ['USA', 'Germany'],
-  targetFields: ['Business Informatics', 'Data / Computer Science', 'Business', 'Engineering / Technology'],
+  targetFields: ['Computer Science', 'Artificial Intelligence', 'Economics', 'Business'], prioritySubjects: ['german'],
   englishLevel: 'Not sure yet', germanLevel: 'Not sure yet', academicGoalNotes: '', theme: 'system', testPlans: [],
 };
 const DAY = 86_400_000;
@@ -95,15 +101,19 @@ function normalProfile(value = {}) {
     if (!test || !text(test.name, 100)) return null;
     return { id: text(test.id, 150) || uid('test'), name: text(test.name, 100), status: text(test.status, 100) || 'considering', targetDate: isDateKey(test.targetDate) ? test.targetDate : '', targetScore: text(String(test.targetScore ?? ''), 100), notes: text(test.notes) };
   });
+  profile.prioritySubjects = words(value.prioritySubjects ?? DEFAULT_PROFILE.prioritySubjects);
+  profile.targetAverage = number(value.targetAverage, null, 0, 15);
+  profile.language = value.language === 'en' ? 'en' : 'de';
   return profile;
 }
 function normalSubject(subject) {
   if (!subject || !text(subject.id, 150) || !text(subject.name, 150)) return null;
-  return { id: text(subject.id, 150), name: text(subject.name, 150), level: subject.level === 'LK' ? 'LK' : 'GK', written: number(subject.written, null, 0, 15), oral: number(subject.oral, null, 0, 15), baselineWritten: number(Object.hasOwn(subject, 'baselineWritten') ? subject.baselineWritten : subject.written, null, 0, 15), baselineOral: number(Object.hasOwn(subject, 'baselineOral') ? subject.baselineOral : subject.oral, null, 0, 15), target: number(subject.target, 10, 0, 15), weakTopics: words(subject.weakTopics), enabled: subject.enabled !== false };
+  return { id: text(subject.id, 150), name: text(subject.name, 150), level: subject.level === 'LK' ? 'LK' : 'GK', written: number(subject.written, null, 0, 15), oral: number(subject.oral, null, 0, 15), baselineWritten: number(Object.hasOwn(subject, 'baselineWritten') ? subject.baselineWritten : subject.written, null, 0, 15), baselineOral: number(Object.hasOwn(subject, 'baselineOral') ? subject.baselineOral : subject.oral, null, 0, 15), target: number(subject.target, Object.hasOwn(subject, 'target') ? null : 10, 0, 15), weakTopics: words(subject.weakTopics), enabled: subject.enabled !== false,
+    grading: normalizeGrading(subject.grading), priority: ['auto', 'high', 'low'].includes(subject.priority) ? subject.priority : 'auto', difficulty: integer(subject.difficulty, null, 1, 5) };
 }
 function normalExam(exam) {
   if (!exam || !text(exam.id, 150) || !text(exam.title, 300) || !isDateKey(exam.date)) return null;
-  return { id: text(exam.id, 150), title: text(exam.title, 300), subjectId: text(exam.subjectId, 150), date: exam.date, topics: words(exam.topics), format: ['written', 'oral', 'test', 'practical'].includes(exam.format) ? exam.format : 'written', target: number(exam.target, 10, 0, 15), ...(isDateKey(exam.createdDate) ? { createdDate: exam.createdDate } : {}) };
+  return { id: text(exam.id, 150), title: text(exam.title, 300), subjectId: text(exam.subjectId, 150), date: exam.date, topics: words(exam.topics), format: ['written', 'oral', 'test', 'practical'].includes(exam.format) ? exam.format : 'written', target: number(exam.target, Object.hasOwn(exam, 'target') ? null : 10, 0, 15), time: clockMinutes(exam.time) !== null ? exam.time : '', importance: ['low', 'normal', 'high'].includes(exam.importance) ? exam.importance : 'normal', notes: text(exam.notes, 3000), preparation: text(exam.preparation, 3000), ...(isDateKey(exam.createdDate) ? { createdDate: exam.createdDate } : {}) };
 }
 function normalTask(task) {
   if (!task || !text(task.id, 200) || !text(task.title, 300) || !isDateKey(task.date)) return null;
@@ -117,12 +127,15 @@ function normalTask(task) {
     origin: task.origin === 'generated' ? 'generated' : 'custom', revisionStage: text(task.revisionStage, 100), revisionPlanId: text(task.revisionPlanId, 200), planSignature: text(task.planSignature, 100),
     sessions: list(task.sessions, 20).filter(session => clockMinutes(session?.start) !== null && clockMinutes(session?.end) !== null && clockMinutes(session.end) > clockMinutes(session.start)).map(session => ({ start: session.start, end: session.end })),
     start: clockMinutes(task.start) !== null ? task.start : '', end: clockMinutes(task.end) !== null ? task.end : '',
+    objective: text(task.objective, 500), expectedResult: text(task.expectedResult, 700), learningTopic: text(task.learningTopic, 300), ieltsSkill: ['listening', 'reading', 'writing', 'speaking'].includes(task.ieltsSkill) ? task.ieltsSkill : '',
+    movedFrom: isDateKey(task.movedFrom) ? task.movedFrom : '', reviewDate: isDateKey(task.reviewDate) ? task.reviewDate : '',
     ...(task.skipped !== undefined ? { skipped: task.skipped === true && !completedAt } : {}),
   };
 }
 function normalActivity(activity) {
   if (!activity || !text(activity.id, 150) || !text(activity.name, 300)) return null;
-  return { id: text(activity.id, 150), name: text(activity.name, 300), type: text(activity.type, 100) || 'Project', startDate: isDateKey(activity.startDate) ? activity.startDate : '', endDate: isDateKey(activity.endDate) && (!isDateKey(activity.startDate) || activity.endDate >= activity.startDate) ? activity.endDate : '', updatedDate: isDateKey(activity.updatedDate) ? activity.updatedDate : '', hoursPerWeek: number(activity.hoursPerWeek, null, 0, 168), weeksPerYear: number(activity.weeksPerYear, null, 0, 52) === null ? null : integer(activity.weeksPerYear, null, 0, 52), description: text(activity.description, 4000), responsibilities: text(activity.responsibilities, 4000), achievements: text(activity.achievements, 4000), impact: text(activity.impact, 2000), notes: text(activity.notes, 4000) };
+  return { id: text(activity.id, 150), name: text(activity.name, 300), type: text(activity.type, 100) || 'Project', startDate: isDateKey(activity.startDate) ? activity.startDate : '', endDate: isDateKey(activity.endDate) && (!isDateKey(activity.startDate) || activity.endDate >= activity.startDate) ? activity.endDate : '', updatedDate: isDateKey(activity.updatedDate) ? activity.updatedDate : '', hoursPerWeek: number(activity.hoursPerWeek, null, 0, 168), weeksPerYear: number(activity.weeksPerYear, null, 0, 52) === null ? null : integer(activity.weeksPerYear, null, 0, 52), description: text(activity.description, 4000), responsibilities: text(activity.responsibilities, 4000), achievements: text(activity.achievements, 4000), impact: text(activity.impact, 2000), notes: text(activity.notes, 4000),
+    evidenceStatus: ['planned', 'self-reported', 'verified'].includes(activity.evidenceStatus) ? activity.evidenceStatus : 'self-reported', projectUrl: safeURL(activity.projectUrl), evidence: uniqueRecords(activity.evidence, record => record && text(record.id, 150) ? { id: text(record.id, 150), label: text(record.label, 300), url: safeURL(record.url), note: text(record.note, 2000), verifiedDate: isDateKey(record.verifiedDate) ? record.verifiedDate : '' } : null) };
 }
 function safeURL(value) {
   const url = text(value, 1200);
@@ -131,7 +144,7 @@ function safeURL(value) {
 }
 function normalUniversity(university) {
   if (!university || !text(university.id, 150) || !text(university.name, 300)) return null;
-  return { id: text(university.id, 150), name: text(university.name, 300), country: university.country === 'Germany' ? 'Germany' : 'USA', program: text(university.program, 300), deadline: isDateKey(university.deadline) ? university.deadline : '', requirements: text(university.requirements, 4000), notes: text(university.notes, 4000), url: safeURL(university.url), status: ['researching', 'shortlisted', 'applied'].includes(university.status) ? university.status : 'researching' };
+  return { id: text(university.id, 150), name: text(university.name, 300), country: university.country === 'Germany' ? 'Germany' : 'USA', program: text(university.program, 300), deadline: isDateKey(university.deadline) ? university.deadline : '', requirements: text(university.requirements, 4000), notes: text(university.notes, 4000), url: safeURL(university.url), status: ['researching', 'shortlisted', 'applied'].includes(university.status) ? university.status : 'researching', requirementsStatus: university.requirementsStatus === 'verified' ? 'verified' : 'general', requirementsSource: safeURL(university.requirementsSource), requirementsCheckedDate: isDateKey(university.requirementsCheckedDate) ? university.requirementsCheckedDate : '' };
 }
 function defaultSchedule() {
   return { weekly: [120, 120, 60, 150, 85, 75, 150].map((minutes, day) => ({ day, minutes, windowStart: day === 0 || day === 6 ? '09:00' : '16:00', windowEnd: day === 0 || day === 6 ? '20:00' : '21:00' })), fixedActivities: [], timeOverrides: [] };
@@ -154,7 +167,7 @@ function normalSchedule(value = {}) {
   });
   const overrides = new Map();
   for (const override of list(value.timeOverrides, 1000)) if (isDateKey(override?.date)) overrides.set(override.date, { date: override.date, minutes: integer(override.minutes, 0, 0, 720) });
-  return { weekly, fixedActivities, timeOverrides: [...overrides.values()] };
+  return { weekly, fixedActivities, timeOverrides: [...overrides.values()], lessons: normalizeLessons(value.lessons), cycleAnchor: isDateKey(value.cycleAnchor) ? value.cycleAnchor : '' };
 }
 
 export function createInitialData({ today = localDateKey(), demo = true } = {}) {
@@ -162,12 +175,14 @@ export function createInitialData({ today = localDateKey(), demo = true } = {}) 
   let state = {
     version: 2, createdDate: today, onboardingCompleted: false, demo: Boolean(demo),
     profile: normalProfile(), subjects: SUBJECTS.map(([id, name, level]) => ({ id, name, level, written: null, oral: null, baselineWritten: null, baselineOral: null, target: 10, weakTopics: [], enabled: ['mathematics', 'physics', 'english', 'german'].includes(id) })),
-    exams: [], events: [], tasks: [], grades: [], activities: [], universities: [], schedule: defaultSchedule(), weeklyReviews: [], roadmapCompleted: [], reflections: [], legacyMilestones: [], dismissedTaskIds: [], study: createStudyState(),
+    exams: [], events: [], tasks: [], grades: [], activities: [], universities: [], schedule: normalSchedule(), weeklyReviews: [], roadmapCompleted: [], reflections: [], legacyMilestones: [], dismissedTaskIds: [], study: createStudyState(), ielts: normalizeIELTS(), learning: normalizeLearning(),
   };
   state.universities = [
     { id: 'ucla', name: 'UCLA', country: 'USA', program: 'Explore data, business and technology programmes', deadline: '', requirements: 'Verify current UC requirements for international applicants. UC does not consider SAT/ACT for admission; check each programme and English-proficiency policy.', notes: 'Aspirational option. Keep a balanced list and research cost and financial support.', url: 'https://admission.ucla.edu/apply/international-applicants', status: 'researching' },
     { id: 'berkeley', name: 'UC Berkeley', country: 'USA', program: 'Explore data, business and technology programmes', deadline: '', requirements: 'Verify current UC requirements and course prerequisites. SAT/ACT are not considered for UC admission.', notes: 'Admission is selective; requirements and deadlines need official confirmation.', url: 'https://admissions.berkeley.edu/apply-to-berkeley/international-students/', status: 'researching' },
   ];
+  state.subjects = state.subjects.map(normalSubject);
+  state.universities = state.universities.map(normalUniversity);
   if (!demo) return state;
   // The explicit demo represents a sample week, rather than an installation
   // with real activity before its creation date.
@@ -199,6 +214,9 @@ export function createInitialData({ today = localDateKey(), demo = true } = {}) 
     { id: 'demo-work', title: 'Restaurant work', days: [6], date: '', start: '10:00', end: '12:00', category: 'work' },
   ];
   state.universities.push({ id: 'demo-germany', name: 'TU Darmstadt', country: 'Germany', program: 'Explore Business Informatics / Computer Science', deadline: '', requirements: 'Check current programme admission, NC or aptitude rules, application route and required documents on the official site.', notes: 'Parallel German option — sample, not a confirmed application choice.', url: 'https://www.tu-darmstadt.de/studieren/studieninteressierte/index.en.jsp', status: 'researching' });
+  state.universities = state.universities.map(normalUniversity);
+  state.exams = state.exams.map(normalExam);
+  state.grades = state.grades.map(normalizeAcademicGrade);
   // Clearly labelled demo history shows the review without claiming real work.
   for (let offset = -7; offset < 0; offset++) {
     const date = shiftDate(today, offset);
@@ -211,36 +229,32 @@ export function createInitialData({ today = localDateKey(), demo = true } = {}) 
 /** The owner's supplied starting point. Unreported details remain unknown. */
 export function createPersonalProfile({ today = localDateKey() } = {}) {
   const state = createInitialData({ today, demo: false });
-  state.profile.academicGoalNotes = 'Improve English, Mathematics written performance and German; keep developing Mathematics and Physics.';
-  const known = {
-    mathematics: { written: 6, oral: 11 },
-    english: { oral: 7, weakTopics: ['Writing'] },
-    history: { oral: 8 },
-    'computer-science': { oral: 10 },
-    politics: { oral: 9 },
-  };
+  state.profile.academicGoalNotes = 'Englisch, schriftliche Mathematik und Deutsch verbessern; Mathematik und Physik kontinuierlich weiterentwickeln.';
+  // Earlier conversations contain historical results, not current assessments.
+  // A new installation starts without grades; existing saved grades never pass
+  // through this starting-profile helper and are preserved by normalizeData.
+  const known = { german: { weakTopics: ['Textanalyse', 'Strukturierte Argumentation'] }, english: { weakTopics: ['Writing'] }, history: {}, 'computer-science': {}, politics: {} };
   state.subjects = state.subjects.map(subject => normalSubject({
     ...subject, ...(known[subject.id] || {}),
     enabled: subject.enabled || Object.hasOwn(known, subject.id),
-    baselineWritten: known[subject.id]?.written ?? null,
-    baselineOral: known[subject.id]?.oral ?? null,
+    baselineWritten: null, baselineOral: null,
   }));
   state.activities = [
     ['volleyball-club', 'Volleyball club', 'Sport'],
     ['restaurant-management', 'Restaurant management', 'Work / entrepreneurship'],
     ['social-media-marketing', 'Social media / marketing', 'Project'],
     ['internships', 'Internships', 'Internship'],
-  ].map(([id, name, type]) => normalActivity({ id, name, type, updatedDate: today }));
+    ['coding-projects', 'Coding projects', 'Project'],
+  ].map(([id, name, type]) => normalActivity({ id, name, type, updatedDate: today,
+    notes: id === 'volleyball-club' ? 'Training Dienstag- und Freitagabend; genaue Uhrzeiten noch offen. Trage bestätigte Zeiten in deine festen Termine ein.' : '',
+  }));
   state.universities = state.universities.map(university => ({
     ...university, program: '', notes: '',
     requirements: 'Check programme prerequisites and English requirements. UC does not consider SAT/ACT for admission.',
   }));
-  // Days are known; these evening times and the weekly allowances are editable
-  // starting estimates, confirmed or changed in onboarding rather than facts.
-  state.schedule.fixedActivities = [{
-    id: 'volleyball-weekly', title: 'Volleyball', days: [2, 5], date: '',
-    start: '18:30', end: '20:30', category: 'sport',
-  }];
+  // Training days are known, but exact hours are not. Keep that information in
+  // the activity note until the owner supplies real times; never reserve made-up
+  // commitments. Existing saved schedules are preserved by normalizeData.
   return state;
 }
 
@@ -254,9 +268,10 @@ export function normalizeData(value, today = localDateKey()) {
   const tasks = uniqueRecords(value.tasks, normalTask);
   const gradeIds = new Set();
   const grades = list(value.grades).map(grade => {
-    if (!grade || !text(grade.id, 150) || !isDateKey(grade.date) || typeof grade.points !== 'number' || !Number.isFinite(grade.points) || grade.points < 0 || grade.points > 15 || gradeIds.has(grade.id)) return null;
+    const normalized = normalizeAcademicGrade(grade);
+    if (!normalized || gradeIds.has(normalized.id)) return null;
     gradeIds.add(grade.id);
-    return { id: text(grade.id, 150), subjectId: text(grade.subjectId, 150), points: grade.points, type: grade.type === 'oral' ? 'oral' : 'written', date: grade.date, note: text(grade.note, 3000) };
+    return normalized;
   }).filter(Boolean).filter(grade => subjectIds.has(grade.subjectId));
   const reviews = new Map();
   for (const review of list(value.weeklyReviews, 1000)) {
@@ -268,7 +283,7 @@ export function normalizeData(value, today = localDateKey()) {
     ...base, version: 2, createdDate: isDateKey(value.createdDate) ? value.createdDate : today,
     onboardingCompleted: value.onboardingCompleted === true, demo: value.demo === true,
     profile: normalProfile(value.profile), subjects: Array.isArray(value.subjects) ? subjects : base.subjects,
-    exams: uniqueRecords(value.exams, normalExam), events: normalizeEvents(value.events), tasks, grades, study: normalizeStudy(value.study),
+    exams: uniqueRecords(value.exams, normalExam), events: normalizeEvents(value.events), tasks, grades, study: normalizeStudy(value.study), ielts: normalizeIELTS(value.ielts), learning: normalizeLearning(value.learning),
     activities: uniqueRecords(value.activities, normalActivity), universities: Array.isArray(value.universities) ? uniqueRecords(value.universities, normalUniversity) : base.universities,
     schedule: normalSchedule(value.schedule), weeklyReviews: [...reviews.values()].sort((a, b) => b.weekStart.localeCompare(a.weekStart)),
     roadmapCompleted: words(value.roadmapCompleted, 300), dismissedTaskIds: words(value.dismissedTaskIds, 3000),
@@ -320,7 +335,7 @@ export function getAvailability(state, date) {
   const weekly = schedule.weekly.find(entry => entry.day === day);
   const start = clockMinutes(weekly.windowStart);
   const end = clockMinutes(weekly.windowEnd);
-  const blocks = schedule.fixedActivities.filter(event => event.date ? event.date === date : event.days.includes(day)).sort((a, b) => a.start.localeCompare(b.start));
+  const blocks = [...schedule.fixedActivities.filter(event => event.date ? event.date === date : event.days.includes(day)), ...lessonBlocks({ ...state, schedule }, date)].sort((a, b) => a.start.localeCompare(b.start));
   const busy = blocks.map(block => [Math.max(start, clockMinutes(block.start)), Math.min(end, clockMinutes(block.end))]).filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
   const merged = [];
   for (const block of busy) {
@@ -349,6 +364,7 @@ function subjectGap(subject) {
   return current === null ? 1 : Math.max(0, subject.target - Math.min(...weakestRecorded));
 }
 function subjectFor(state, id) { return state.subjects.find(subject => subject.id === id); }
+const subjectLabel = subject => ({ mathematics: 'Mathematik', physics: 'Physik', english: 'Englisch', german: 'Deutsch', history: 'Geschichte', politics: 'Politik / Wirtschaft', 'computer-science': 'Informatik' }[subject?.id] || subject?.name || 'Fach');
 function languageKind(subject) {
   if (/english|englisch/i.test(subject?.name ?? '')) return 'english';
   if (/german|deutsch/i.test(subject?.name ?? '')) return 'german';
@@ -362,54 +378,55 @@ export function getExamPlan(state, examId, today = localDateKey()) {
   if (!exam) return [];
   calendar(today);
   const subject = subjectFor(state, exam.subjectId);
-  const name = subject?.name ?? 'Subject';
-  const topic = exam.topics[0] || subject?.weakTopics?.[0] || 'the exam topics';
+  const name = subjectLabel(subject);
+  const provisional = !exam.topics.length;
+  const topic = exam.topics[0] || 'die noch zu bestätigenden Prüfungsthemen';
   const language = languageKind(subject);
   let templates;
   if (exam.format === 'oral') {
     templates = [
-      ['understand', 14, `Build a concept map: ${topic}`, 'Group key ideas and explain each relationship without notes.', 25],
-      ['explain', 10, `Explain ${topic} aloud`, 'Record a two-minute explanation; check clarity and missing ideas.', 20],
-      ['questions', 7, `Answer ${name} follow-up questions`, 'Write six likely questions and practise giving supported answers.', 25],
-      ['timed', 4, `Run a timed ${name} oral rehearsal`, 'Prepare under timed conditions, present aloud and request feedback.', 30],
-      ['mistakes', 2, 'Repair unclear explanations', 'Revisit errors from your rehearsal and explain them accurately.', 20],
-      ['light', 1, 'Light oral revision', 'Review cue cards briefly. Finish early and protect sleep.', 15],
+      ['understand', 14, `Begriffsnetz zu ${topic} erstellen`, 'Ordne die Kernideen und erkläre ihre Zusammenhänge ohne Unterlagen.', 25],
+      ['explain', 10, `${topic} laut erklären`, 'Nimm eine zweiminütige Erklärung auf und prüfe Verständlichkeit und fehlende Inhalte.', 20],
+      ['questions', 7, `Rückfragen in ${name} beantworten`, 'Formuliere sechs mögliche Rückfragen und übe begründete Antworten.', 25],
+      ['timed', 4, `Eine mündliche ${name}-Probe unter Zeitdruck durchführen`, 'Bereite zeitgebunden vor, trage laut vor und bitte um Feedback.', 30],
+      ['mistakes', 2, 'Unklare Erklärungen verbessern', 'Gehe Fehler aus der Probe durch und erkläre die korrigierten Zusammenhänge.', 20],
+      ['light', 1, 'Mündlich leicht wiederholen', 'Wiederhole Stichwortkarten kurz. Höre früh auf und schütze deinen Schlaf.', 15],
     ];
   } else if (exam.format === 'practical') {
     templates = [
-      ['understand', 14, `Understand the procedure: ${topic}`, 'List the purpose, equipment, safety requirements and expected observations.', 25],
-      ['practice', 10, `Rehearse the ${name} procedure`, 'Use permitted equipment or a written simulation and record every step.', 30],
-      ['interpret', 7, `Interpret ${name} results`, 'Practise reading results, explaining uncertainty and drawing a supported conclusion.', 25],
-      ['timed', 4, `Run a timed ${name} practical rehearsal`, 'Rehearse the assessed procedure under realistic conditions with appropriate supervision.', 35],
-      ['mistakes', 2, 'Correct procedure and interpretation errors', 'Repair the weakest step and explain why the corrected method works.', 20],
-      ['light', 1, 'Light practical revision', 'Review your procedure checklist and organise the required equipment.', 15],
+      ['understand', 14, `Das Vorgehen zu ${topic} verstehen`, 'Notiere Ziel, Hilfsmittel, Sicherheitsregeln und erwartete Beobachtungen.', 25],
+      ['practice', 10, `Das praktische ${name}-Vorgehen üben`, 'Nutze erlaubte Hilfsmittel oder eine schriftliche Simulation und halte jeden Schritt fest.', 30],
+      ['interpret', 7, `Ergebnisse in ${name} deuten`, 'Lies Ergebnisse, erkläre Unsicherheit und formuliere eine gestützte Schlussfolgerung.', 25],
+      ['timed', 4, `Eine praktische ${name}-Probe unter Zeitdruck durchführen`, 'Übe den geforderten Ablauf unter realistischen Bedingungen und angemessener Aufsicht.', 35],
+      ['mistakes', 2, 'Ablauf- und Deutungsfehler korrigieren', 'Verbessere den schwächsten Schritt und erkläre, warum die richtige Methode funktioniert.', 20],
+      ['light', 1, 'Den praktischen Ablauf leicht wiederholen', 'Gehe deine Ablaufcheckliste durch und lege benötigte Hilfsmittel bereit.', 15],
     ];
   } else if (language) {
     templates = [
-      ['understand', 14, `Connect context and themes: ${topic}`, 'Make a one-page context map and select three useful examples.', 25],
-      ['summary', 10, `${name}: write a summary paragraph`, 'Read a short passage; summarise neutrally in your own words and check tense.', 25],
-      ['analysis', 7, `${name}: build an analysis paragraph`, 'State a claim, quote evidence and explain language, effect and purpose.', 30],
-      ['timed', 4, `Complete a timed ${name} exam task`, 'Practise the actual exam format, then compare with the marking criteria.', 40],
-      ['mistakes', 2, `${name}: revise your mistake log`, 'Rewrite your weakest paragraph and check recurring grammar errors.', 20],
-      ['light', 1, `${name}: light revision`, 'Review structure and key vocabulary; avoid starting a full new essay.', 15],
+      ['understand', 14, `Kontext und Themen zu ${topic} verbinden`, 'Erstelle eine einseitige Übersicht und wähle drei passende Beispiele.', 25],
+      ['summary', 10, `${name}: einen Zusammenfassungsabsatz schreiben`, 'Lies einen kurzen Abschnitt. Fasse sachlich in eigenen Worten zusammen und prüfe die Zeitform.', 25],
+      ['analysis', 7, `${name}: einen Analyseabsatz aufbauen`, 'Formuliere eine Deutung, belege sie am Text und erkläre Sprache, Wirkung und Absicht.', 30],
+      ['timed', 4, `Eine ${name}-Prüfungsaufgabe unter Zeitdruck bearbeiten`, 'Übe das tatsächliche Prüfungsformat und gleiche deinen Versuch mit den Bewertungskriterien ab.', 40],
+      ['mistakes', 2, `${name}: dein Fehlerprotokoll überarbeiten`, 'Schreibe deinen schwächsten Absatz neu und prüfe wiederkehrende Grammatikfehler.', 20],
+      ['light', 1, `${name}: leicht wiederholen`, 'Wiederhole Aufbau und Schlüsselbegriffe. Beginne jetzt keinen vollständigen neuen Aufsatz.', 15],
     ];
   } else if (scienceKind(subject)) {
     templates = [
-      ['understand', 14, `Understand the method: ${topic}`, 'Explain the core principle and work through one annotated example.', 25],
-      ['practice', 10, `Solve three ${name} problems`, 'Attempt without a solution sheet; show reasoning, units and each step.', 30],
-      ['mixed', 7, `Practise a mixed ${name} problem set`, 'Mix question types so you must choose the method yourself.', 30],
-      ['timed', 4, `Run a timed ${name} practice paper`, 'Use exam conditions and mark against a solution or teacher rubric.', 40],
-      ['mistakes', 2, `${name}: redo your error-log problems`, 'Reattempt the exact mistakes until you can explain the corrected method.', 25],
-      ['light', 1, `${name}: light formula and concept review`, 'Review a concise formula/concept sheet and organise your equipment.', 15],
+      ['understand', 14, `Die Methode zu ${topic} verstehen`, 'Erkläre das Grundprinzip und bearbeite ein kommentiertes Beispiel.', 25],
+      ['practice', 10, `Drei ${name}-Aufgaben lösen`, 'Rechne zuerst ohne Lösungsblatt. Zeige Begründungen, Einheiten und jeden Schritt.', 30],
+      ['mixed', 7, `Gemischte ${name}-Aufgaben bearbeiten`, 'Mische Aufgabentypen, damit du die passende Methode selbst auswählen musst.', 30],
+      ['timed', 4, `Eine ${name}-Probeklausur unter Zeitdruck bearbeiten`, 'Nutze Prüfungsbedingungen und korrigiere mit einer Lösung oder den Kriterien deiner Lehrkraft.', 40],
+      ['mistakes', 2, `${name}: Fehleraufgaben erneut lösen`, 'Löse die früher falschen Aufgaben erneut, bis du die korrigierte Methode erklären kannst.', 25],
+      ['light', 1, `${name}: Formeln und Konzepte leicht wiederholen`, 'Wiederhole eine kurze Formel- und Begriffsübersicht und lege Hilfsmittel bereit.', 15],
     ];
   } else {
     templates = [
-      ['understand', 14, `Map the key ideas: ${topic}`, 'Connect facts, causes and examples in a concise concept map.', 25],
-      ['recall', 10, `${name}: retrieve key evidence`, 'Recall key ideas without notes, then check gaps and source accuracy.', 25],
-      ['argument', 7, `Build a supported ${name} argument`, 'Outline an answer with a claim, precise evidence and evaluation.', 30],
-      ['timed', 4, `Write a timed ${name} response`, 'Practise your exam format and compare against the marking criteria.', 35],
-      ['mistakes', 2, `${name}: review weak answers`, 'Correct omissions, unclear reasoning and weak evidence in earlier work.', 20],
-      ['light', 1, `${name}: light key-idea revision`, 'Review concise cue cards and rest before the exam.', 15],
+      ['understand', 14, `Kernideen zu ${topic} ordnen`, 'Verbinde Fakten, Ursachen und Beispiele in einem kurzen Begriffsnetz.', 25],
+      ['recall', 10, `${name}: wichtige Belege abrufen`, 'Rufe Kernideen ohne Notizen ab. Prüfe danach Lücken und die Genauigkeit deiner Belege.', 25],
+      ['argument', 7, `Ein belegtes Argument in ${name} entwickeln`, 'Gliedere eine Antwort mit Aussage, präzisen Belegen und Bewertung.', 30],
+      ['timed', 4, `Eine ${name}-Antwort unter Zeitdruck schreiben`, 'Practise your exam format and compare against the marking criteria.', 35],
+      ['mistakes', 2, `${name}: schwache Antworten überarbeiten`, 'Korrigiere Auslassungen, unklare Begründungen und schwache Belege in bisherigen Antworten.', 20],
+      ['light', 1, `${name}: Kernideen leicht wiederholen`, 'Wiederhole kurze Stichwortkarten und erhole dich vor der Prüfung.', 15],
     ];
   }
   if (exam.format === 'test') templates = templates.filter(([stage]) => !['mixed', 'analysis', 'argument'].includes(stage));
@@ -433,14 +450,14 @@ export function getExamPlan(state, examId, today = localDateKey()) {
     const completedMinutes = Math.min(requiredMinutes, credited);
     const completed = completedMinutes >= requiredMinutes;
     const remainingMinutes = stage === 'timed' && !completed ? requiredMinutes : Math.max(0, requiredMinutes - completedMinutes);
-    return { id, date: shiftDate(exam.date, -adaptedOffset), title: text(title, 300), minutes: requiredMinutes, requiredMinutes, completedMinutes, remainingMinutes, stage, completed, reason: text(reason, 1200), order: index };
+    return { id, date: shiftDate(exam.date, -adaptedOffset), title: text(title, 300), minutes: requiredMinutes, requiredMinutes, completedMinutes, remainingMinutes, stage, completed, provisional, reason: text(`${provisional ? 'Vorläufig: Prüfungsthemen fehlen. Bestätige sie zuerst mit deiner Lehrkraft. ' : ''}${reason}`, 1200), order: index };
   });
 }
 
 function weeklyBoost(state, date) {
   const previousStart = shiftDate(startOfWeek(date), -7);
   const review = state.weeklyReviews.find(item => item.weekStart === previousStart);
-  if (review?.focusSubjectId) return { subjectId: review.focusSubjectId, reason: 'Your weekly review selected this subject for extra attention.' };
+  if (review?.focusSubjectId) return { subjectId: review.focusSubjectId, reason: 'Dein Wochenrückblick hat dieses Fach als Schwerpunkt festgelegt.' };
   const previous = state.tasks.filter(task => task.date >= previousStart && task.date <= shiftDate(previousStart, 6) && task.subjectId);
   const bySubject = new Map();
   for (const task of previous) {
@@ -450,7 +467,7 @@ function weeklyBoost(state, date) {
     bySubject.set(task.subjectId, entry);
   }
   const weakest = [...bySubject].filter(([, counts]) => counts.planned >= 2 && counts.completed / counts.planned < .7).sort((a, b) => (a[1].completed / a[1].planned) - (b[1].completed / b[1].planned))[0];
-  return weakest ? { subjectId: weakest[0], reason: 'Last week this subject received less completed practice; today uses a smaller restart.' } : null;
+  return weakest ? { subjectId: weakest[0], reason: 'Letzte Woche hast du für dieses Fach weniger Übung abgeschlossen. Heute gelingt der Einstieg mit einer kürzeren Einheit.' } : null;
 }
 
 function weeklyLoad(state, date, availableMinutes) {
@@ -468,6 +485,7 @@ function candidate(key, title, category, minutes, score, reason, extra = {}) {
 }
 function makeCandidates(state, date) {
   const candidates = [];
+  const subjectPriorities = new Map(getSubjectPriorities(state, date).map(item => [item.subjectId, item]));
   const graduated = state.profile.schoolYear === 'Graduated';
   const ordinal = Math.floor(Date.UTC(...date.split('-').map((value, i) => i === 1 ? Number(value) - 1 : Number(value))) / DAY);
   const boost = weeklyBoost(state, date);
@@ -478,58 +496,83 @@ function makeCandidates(state, date) {
     const until = daysBetween(date, exam.date);
     const subject = subjectFor(state, exam.subjectId);
     if (until < 1 || until > 45 || subject?.enabled === false) continue;
-    const context = exam.topics.length ? [`Practise the course context: ${exam.topics.join(', ')}.`] : [];
+    const context = exam.topics.length ? [`Bearbeite den bestätigten Prüfungskontext: ${exam.topics.join(', ')}.`] : ['Vorläufiger Plan: Bestätige zuerst die tatsächlichen Prüfungsthemen; ein schwaches Unterrichtsthema ist noch kein bestätigter Prüfungsinhalt.'];
     const plan = getExamPlan(priorCompletionState, exam.id, date);
     const incomplete = plan.filter(step => !step.completed);
     if (!incomplete.length) continue;
     const due = incomplete.filter(step => step.date <= date);
     const foundation = incomplete.find(step => step.stage === 'understand');
     const next = until === 1 ? due.find(step => step.stage === 'light') || due.at(-1) : foundation || due.at(-1) || null;
-    const score = (until <= 3 ? 165 : until <= 7 ? 140 : until <= 14 ? 112 : until <= 21 ? 83 : 55) + subjectGap(subject || { target: 10 }) * 3 + (boost?.subjectId === exam.subjectId ? 15 : 0);
+    const score = Math.max((until <= 3 ? 165 : until <= 7 ? 140 : until <= 14 ? 112 : until <= 21 ? 83 : 55) + subjectGap(subject || { target: 10 }) * 3, subjectPriorities.get(exam.subjectId)?.score || 0) + (exam.importance === 'high' ? 12 : exam.importance === 'low' ? -5 : 0) + (boost?.subjectId === exam.subjectId ? 15 : 0);
     if (next) {
       candidates.push(candidate(`exam-${exam.id}-${next.stage}`, next.title, languageKind(subject) ? 'language' : 'academics', Math.max(5, next.remainingMinutes || next.minutes), score,
-        `${exam.title} is in ${until} day${until === 1 ? '' : 's'}. ${next.reason}`, { subjectId: exam.subjectId, examId: exam.id, revisionStage: next.stage, revisionPlanId: next.id, goalId: 'grades', steps: [...context, next.reason, 'Save one mistake or lesson in your task notes.'] }));
+        `${exam.title} ist in ${until} Tag${until === 1 ? '' : 'en'}. ${next.reason}`, { subjectId: exam.subjectId, examId: exam.id, revisionStage: next.stage, revisionPlanId: next.id, goalId: 'grades', steps: [...context, next.reason, 'Speichere einen Fehler oder eine Erkenntnis in deinen Aufgabennotizen.'] }));
       if (plan.length <= 3 && until > 1 && next.stage === 'understand') {
         const followUp = incomplete.find(step => step.stage !== 'understand' && step.stage !== 'light' && step.date <= date);
         if (followUp) candidates.push(candidate(`exam-${exam.id}-${followUp.stage}`, followUp.title, languageKind(subject) ? 'language' : 'academics', Math.max(5, followUp.remainingMinutes || followUp.minutes), score - 1,
-          `This short-notice exam is in ${until} days. Practise one small example after establishing the basic concept.`, { subjectId: exam.subjectId, examId: exam.id, revisionStage: followUp.stage, revisionPlanId: followUp.id, goalId: 'grades', steps: [...context, followUp.reason, 'Choose one short exercise and check the solution carefully.'] }));
+          `Diese kurzfristige Prüfung ist in ${until} Tagen. Übe nach dem Grundverständnis ein kleines Beispiel.`, { subjectId: exam.subjectId, examId: exam.id, revisionStage: followUp.stage, revisionPlanId: followUp.id, goalId: 'grades', steps: [...context, followUp.reason, 'Wähle eine kurze Aufgabe und prüfe die Lösung sorgfältig.'] }));
       }
     } else {
-      const topic = exam.topics[ordinal % Math.max(1, exam.topics.length)] || subject?.weakTopics[0] || 'the exam topics';
-      candidates.push(candidate(`exam-${exam.id}-maintenance`, `${subject?.name || 'Exam'}: consolidate ${topic}`, languageKind(subject) ? 'language' : 'academics', 20, score - 12,
-        `${exam.title} is in ${until} days. Your foundation milestone is complete; keep practising without moving the final rehearsal or light revision too early. Next revision milestone: ${incomplete[0].date}.`,
-        { subjectId: exam.subjectId, examId: exam.id, goalId: 'grades', steps: [...context, ...(languageKind(subject) ? ['Write one paragraph using current exam material.', 'Improve its structure and evidence using your class criteria.'] : ['Recall the key concept without notes.', 'Solve two targeted questions and check your method.'])] }));
+      const topic = exam.topics[ordinal % Math.max(1, exam.topics.length)] || 'die noch zu bestätigenden Prüfungsthemen';
+      candidates.push(candidate(`exam-${exam.id}-maintenance`, `${subjectLabel(subject)}: ${topic} festigen`, languageKind(subject) ? 'language' : 'academics', 20, score - 12,
+        `${exam.title} ist in ${until} Tagen. Die Grundlagen sind bearbeitet. Übe weiter; Probedurchlauf und leichte Wiederholung bleiben nah an der Prüfung. Nächster Vorbereitungsschritt: ${incomplete[0].date}.`,
+        { subjectId: exam.subjectId, examId: exam.id, goalId: 'grades', steps: [...context, ...(languageKind(subject) ? ['Schreibe einen Absatz mit aktuellem Prüfungsmaterial.', 'Verbessere Aufbau und Belege anhand deiner Unterrichtskriterien.'] : ['Erkläre das Grundprinzip ohne Notizen.', 'Löse zwei passende Fragen und prüfe deine Methode.'])] }));
     }
   }
   for (const subject of state.subjects.filter(subject => subject.enabled && (!graduated || languageKind(subject)))) {
     if (candidates.some(item => item.examId && item.subjectId === subject.id)) continue;
-    const topic = subject.weakTopics[ordinal % Math.max(1, subject.weakTopics.length)] || (graduated ? 'academic writing' : 'today’s least clear lesson');
+    const topic = subject.weakTopics[ordinal % Math.max(1, subject.weakTopics.length)] || (graduated ? 'wissenschaftsnahes Schreiben' : 'den unklarsten Inhalt der letzten Stunde');
     const gap = subjectGap(subject);
-    const grade = currentGrade(subject);
-    const components = `${typeof subject.written === 'number' ? `Written ${subject.written} points` : 'Written points not recorded'}; ${typeof subject.oral === 'number' ? `oral ${subject.oral} points` : 'oral points not recorded'}.`;
-    const weakComponent = typeof subject.written === 'number' && subject.written < subject.target && (typeof subject.oral !== 'number' || subject.written <= subject.oral) ? `Your written result needs improvement toward ${subject.target} points.` : typeof subject.oral === 'number' && subject.oral < subject.target ? `Your oral result needs improvement toward ${subject.target} points.` : '';
+    const academic = calculateSubject(state, subject.id);
+    const grade = academic.average;
+    const components = `${typeof subject.written === 'number' ? `Schriftlich ${subject.written} Punkte` : 'Schriftliche Punkte offen'}; ${typeof subject.oral === 'number' ? `mündlich ${subject.oral} Punkte` : 'mündliche Punkte offen'}.`;
+    const weakComponent = typeof subject.written === 'number' && subject.written < subject.target && (typeof subject.oral !== 'number' || subject.written <= subject.oral) ? `Deine schriftliche Leistung soll sich in Richtung ${subject.target} Punkte verbessern.` : typeof subject.oral === 'number' && subject.oral < subject.target ? `Deine mündliche Leistung soll sich in Richtung ${subject.target} Punkte verbessern.` : '';
     const language = languageKind(subject);
-    const score = 48 + gap * 8 + (subject.level === 'LK' ? 8 : 0) + (boost?.subjectId === subject.id ? 35 : 0) + (language ? (ordinal % 2 === (language === 'english' ? 0 : 1) ? 6 : 0) : 0);
-    const title = language ? `${subject.name}: improve ${topic}` : `${subject.name}: review ${topic}`;
+    const score = (subjectPriorities.get(subject.id)?.score ?? 48 + gap * 8 + (subject.level === 'LK' ? 8 : 0)) + (boost?.subjectId === subject.id ? 35 : 0) + (language ? (ordinal % 2 === (language === 'english' ? 0 : 1) ? 6 : 0) : 0);
+    const title = language ? `${subjectLabel(subject)}: ${topic} gezielt verbessern` : `${subjectLabel(subject)}: ${topic} üben`;
     candidates.push(candidate(`subject-${subject.id}`, title, language ? 'language' : 'academics', boost?.subjectId === subject.id ? 20 : 25, score,
-      `${graduated ? 'Strengthen clear academic writing for university study and your applications.' : grade === null ? 'Build a baseline before your next assessment.' : `${components} Current recorded average ${grade.toFixed(1)} points; target ${subject.target}. ${weakComponent}`}${boost?.subjectId === subject.id ? ` ${boost.reason}` : ''}`,
-      { subjectId: subject.id, goalId: language ? 'language' : 'grades', steps: language ? [`Write one focused paragraph using ${graduated ? 'your current practice material' : 'your school material'}.`, 'Check structure, grammar and precision; improve one sentence.'] : ['Explain the idea from memory.', 'Attempt two practice questions and check your errors.'] }));
+      `${graduated ? 'Stärke klares wissenschaftsnahes Schreiben für Studium und Bewerbungen.' : grade === null ? academic.records.length ? academic.reason : 'Kläre deinen aktuellen Lernstand vor der nächsten Leistung.' : `${components} ${academic.methodLabel}: ${grade.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte; ${subject.target === null ? 'Ziel noch offen' : `Ziel ${subject.target}`}. ${weakComponent}`}${boost?.subjectId === subject.id ? ` ${boost.reason}` : ''}`,
+      { subjectId: subject.id, goalId: language ? 'language' : 'grades', steps: language ? [`Schreibe einen klar gegliederten Absatz mit ${graduated ? 'deinem aktuellen Übungsmaterial' : 'deinem Unterrichtsmaterial'}.`, 'Prüfe Aufbau, Grammatik und Genauigkeit. Verbessere einen Satz.'] : ['Erkläre den Gedanken aus dem Gedächtnis.', 'Bearbeite zwei passende Übungsfragen und korrigiere deine Fehler.'] }));
   }
   const languageId = ordinal % 2 === 0 ? 'english' : 'german';
   const languageSubject = state.subjects.find(subject => languageKind(subject) === languageId && subject.enabled);
-  const languageName = languageId === 'english' ? 'English' : 'German';
+  const languageName = languageId === 'english' ? 'Englisch' : 'Deutsch';
   const languageLevel = languageId === 'english' ? state.profile.englishLevel : state.profile.germanLevel;
   if (!candidates.some(item => item.category === 'language' && item.score > 105)) {
     const beginner = /^A[12]$/i.test(languageLevel);
     const advanced = /^C[12]$/i.test(languageLevel) || /native/i.test(languageLevel);
     const count = beginner ? 4 : advanced ? 12 : 8;
-    candidates.push(candidate(`vocabulary-${languageId}`, `${languageName}: use ${count} ${beginner ? 'useful everyday' : 'precise'} words`, 'language', 10, 47,
-      `Build ${languageLevel || 'academic'} vocabulary you can use in ${graduated ? 'academic' : 'school'} writing. Active use matters more than memorising a long list.`,
-      { subjectId: languageSubject?.id || '', goalId: 'language', steps: [`Select ${count} ${beginner ? 'common words from a short, accessible passage' : 'unfamiliar words from your current class text'}.`, `Write ${beginner ? '2 short' : advanced ? '5 precise' : '4 original'} sentences and recall the words without looking.`] }));
+    candidates.push(candidate(`vocabulary-${languageId}`, `${languageName}: ${count} ${beginner ? 'alltagstaugliche' : 'präzise'} Wörter aktiv anwenden`, 'language', 10, 47,
+      `Baue Wortschatz auf, den du beim ${graduated ? 'wissenschaftsnahen' : 'schulischen'} Schreiben aktiv verwenden kannst. Übe eigene Sätze und Abrufen statt nur eine lange Liste.`,
+      { subjectId: languageSubject?.id || '', goalId: 'language', steps: [`Wähle ${count} ${beginner ? 'häufige Wörter aus einem kurzen, gut verständlichen Text' : 'unbekannte Wörter aus deinem aktuellen Unterrichtstext'}.`, `Schreibe ${beginner ? '2 kurze' : advanced ? '5 präzise' : '4 eigene'} Sätze und rufe die Wörter ohne Nachschlagen ab.`] }));
   }
   // The calendar owns test, internship, project and application preparation;
   // exams retain the subject-specific revision model above.
-  candidates.push(...getEventCandidates(priorCompletionState, date));
+  const ieltsSummary = getIELTSSummary(state, date);
+  const dedicatedIELTS = ieltsSummary.data.enabled && ieltsSummary.configured;
+  const olderIELTSEvents = new Set((state.profile.testPlans || []).filter(test => /ielts/i.test(test.name)).map(test => `test:${test.id}`));
+  candidates.push(...getEventCandidates(priorCompletionState, date).filter(item => !dedicatedIELTS || item.eventStage === 'research' || !olderIELTSEvents.has(item.eventId)));
+  const lastIELTS = priorCompletionState.tasks.filter(task => task.completed && task.ieltsSkill && completionDate(task) < date).map(completionDate).sort().at(-1);
+  const ieltsCadence = !lastIELTS || daysBetween(lastIELTS, date) >= 3 ? 25 : daysBetween(lastIELTS, date) >= 2 ? 15 : 0;
+  const majorSchoolExamSoon = state.exams.some(exam => daysBetween(date, exam.date) >= 0 && daysBetween(date, exam.date) <= 2 && subjectFor(state, exam.subjectId)?.enabled);
+  for (const item of getIELTSCandidates(priorCompletionState, date)) {
+    const adjustedMinutes = majorSchoolExamSoon ? Math.min(15, item.minutes) : item.minutes;
+    candidates.push(candidate(item.key, item.title, 'language', adjustedMinutes, item.score + (majorSchoolExamSoon ? 0 : ieltsCadence), `${item.reason}${ieltsCadence && !majorSchoolExamSoon ? ' Eine regelmäßige kurze IELTS-Einheit hält deine Vorbereitung auch vor der letzten Prüfungsphase in Gang.' : ''}`, {
+      ...item, category: 'language', subjectId: state.subjects.find(subject => languageKind(subject) === 'english' && subject.enabled)?.id || '', goalId: 'language',
+      score: item.score + (majorSchoolExamSoon ? 0 : ieltsCadence), minutes: adjustedMinutes,
+      steps: item.steps.map(step => typeof step === 'string' ? step : `${step.title}${step.minutes ? ` · ${step.minutes} Min.` : ''}: ${step.instruction}`),
+      resource: typeof item.resource === 'string' ? item.resource : item.resource?.url || '',
+    }));
+  }
+  for (const review of getLearningReviews(state, date).slice(0, 2)) {
+    const subject = subjectFor(state, review.subjectId);
+    if (!subject?.enabled || (graduated && !languageKind(subject))) continue;
+    candidates.push(candidate(`learning-review-${review.id}`, `${subject.name}: einen früheren Fehler erneut lösen`, languageKind(subject) ? 'language' : 'academics', 15, 82,
+      'Die kurze Wiederholung ist fällig. Prüfe, ob du den gespeicherten Fehler jetzt selbstständig vermeiden kannst.', {
+        subjectId: review.subjectId, learningTopic: review.topic, goalId: languageKind(subject) ? 'language' : 'grades', reviewDate: date,
+        steps: ['Erkläre den gespeicherten Fehler ohne die Lösung anzusehen.', 'Bearbeite die Aufgabe noch einmal und prüfe den Unterschied.', 'Bewerte ehrlich, ob der nächste Abstand kurz oder länger sein soll.'],
+      }));
+  }
   const priorities = getRoadmapPriorities(priorCompletionState, date);
   const seenActions = new Set();
   for (const milestone of priorities) {
@@ -540,7 +583,7 @@ function makeCandidates(state, date) {
     seenActions.add(action.title);
     // Concrete setup actions remain distinct from ongoing subject practice,
     // and should not displace more urgent actual assessments.
-    const timing = milestone.dateVerified ? `Saved application deadline ${milestone.dueDate}. Verify it on the official source.` : `${milestone.pathway} · ${milestone.phaseLabel} preparation target ${milestone.dueDate}.`;
+    const timing = milestone.dateVerified ? `Gespeicherte Bewerbungsfrist ${milestone.dueDate}. Prüfe sie anhand der offiziellen Quelle.` : `${milestone.pathway} · ${milestone.phaseLabel}: Planungsziel ${milestone.dueDate}, keine bestätigte Bewerbungsfrist.`;
     candidates.push(candidate(`roadmap-${milestone.id}-${action.id.split('-').at(-1)}`, action.title, milestone.category, Math.max(5, action.remainingMinutes), milestone.score,
       `${timing} ${milestone.description}`, { goalId: milestone.goalId, roadmapItemId: milestone.id, roadmapStepId: action.id, linkedGoal: `${milestone.pathway} · ${milestone.title}`, resource: milestone.link,
         steps: action.instructions, roadmapAction: true }));
@@ -554,9 +597,9 @@ function makeCandidates(state, date) {
   const update = state.activities.filter(activity => (!activity.updatedDate || daysBetween(activity.updatedDate, date) >= 7) && (!activity.endDate || daysBetween(activity.endDate, date) <= 30))
     .sort((a, b) => (a.updatedDate || '').localeCompare(b.updatedDate || '') || a.id.localeCompare(b.id))[0];
   if (update && (!lastActivityCompletion || daysBetween(lastActivityCompletion, date) >= 7)) {
-    candidates.push(candidate(`activity-impact-${update.id}`, `${update.name}: record one concrete contribution`, 'activity', 15, update.impact ? 40 : 58,
-      'A periodic achievement check keeps your application profile accurate. Record new real responsibilities, outcomes and evidence rather than collecting activities.',
-      { goalId: 'activities', roadmapItemId: documentationMilestone?.id || '', linkedGoal: documentationMilestone ? `${documentationMilestone.pathway} · ${documentationMilestone.title}` : 'Build an honest, sustained application profile', steps: ['Record what you personally did since the last update.', 'Update dates, responsibilities, achievements and measurable impact in Activities.'] }));
+    candidates.push(candidate(`activity-impact-${update.id}`, `${update.name}: einen konkreten Beitrag festhalten`, 'activity', 15, update.impact ? 40 : 58,
+      'Ein gelegentlicher Erfahrungsrückblick hält dein Bewerbungsprofil aktuell. Erfasse echte Verantwortung, Ergebnisse und Belege.',
+      { goalId: 'activities', roadmapItemId: documentationMilestone?.id || '', linkedGoal: documentationMilestone ? `${documentationMilestone.pathway} · ${documentationMilestone.title}` : 'Ein ehrliches, langfristiges Bewerbungsprofil aufbauen', steps: ['Notiere, was du seit der letzten Aktualisierung selbst gemacht hast.', 'Aktualisiere tatsächliche Daten, Verantwortung, Ergebnisse und Wirkung unter Aktivitäten.'] }));
   }
   // Every academic and calendar action explains the relevant long-term goal,
   // including continued subject practice after a roadmap action is finished.
@@ -575,13 +618,16 @@ function makeCandidates(state, date) {
       || allMilestones.find(milestone => !milestone.completed && milestone.goalId === item.goalId && milestone.planningStart <= date)
       || allMilestones.find(milestone => milestone.goalId === item.goalId);
     if (preferred) { item.roadmapItemId = preferred.id; item.linkedGoal = `${preferred.pathway} · ${preferred.title}`; }
-    else item.linkedGoal = item.category === 'review' ? 'Adjust the next week toward your university goals' : 'Build the academic foundation for university';
+    else item.linkedGoal = item.category === 'review' ? 'Die nächste Woche an deinen Studienzielen ausrichten' : 'Die schulische Grundlage fürs Studium stärken';
   }
   if (calendar(date).getDay() === 0) {
-    candidates.push(candidate('weekly-review', 'Review your week and choose one focus', 'review', 10, 110,
-      'A short Sunday review changes next week’s priorities without creating a backlog.', { goalId: 'review', linkedGoal: 'Build a sustainable path from Q1 to university', steps: ['Open Progress and look at completed work.', 'Save your weekly review and choose the subject that needs attention.'] }));
+    candidates.push(candidate('weekly-review', 'Deine Woche auswerten und einen Schwerpunkt wählen', 'review', 10, 110,
+      'Ein kurzer Sonntagsrückblick passt die nächste Woche an, ohne einen Aufgabenstau aufzubauen.', { goalId: 'review', linkedGoal: 'Einen tragfähigen Weg von Q1 bis zum Studium aufbauen', steps: ['Öffne Fortschritt und sieh dir deine abgeschlossene Arbeit an.', 'Speichere deinen Wochenrückblick und wähle ein Fach mit besonderem Bedarf.'] }));
   }
-  return candidates.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
+  return candidates.map(item => {
+    if (!['academics', 'language'].includes(item.category) || item.roadmapAction) return item;
+    return { ...item, ...getTaskLearningMetadata(item, state, date) };
+  }).sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
 }
 
 export function ensureDailyPlan(state, date, referenceDate = date) {
@@ -627,7 +673,7 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
     // Started writing deserves a place, but does not freeze the old duration
     // after a busy day reduces the available time.
     const minutes = Math.min(requestedMinutes, budget);
-    retained.push({ ...task, minutes, ...(task.skipped !== undefined ? { skipped: false } : {}), steps: minutes < requestedMinutes ? words(['Use this short session for one small part of the exercise.', ...task.steps], 12) : task.steps });
+    retained.push({ ...task, minutes, ...(task.skipped !== undefined ? { skipped: false } : {}), steps: minutes < requestedMinutes ? words(['Nutze diese kurze Einheit für einen kleinen Teil der Aufgabe.', ...task.steps], 12) : task.steps });
     budget -= minutes;
   }
   const completedKeys = new Set(retained.map(task => task.id));
@@ -638,13 +684,14 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
   // Make the first two actions the most urgent, then keep breadth where urgency allows.
   for (const item of candidates) {
     if (picked.length >= remainingCount || budget < 5) break;
+    if (item.ieltsSkill && [...retained, ...picked].some(task => task.ieltsSkill)) continue;
     if (picked.length >= 2 && item.score < 140 && picked.some(task => task.category === item.category) && candidates.some(other => !picked.includes(other) && other.score >= 40 && !picked.some(task => task.category === other.category))) continue;
     const slotsLeft = remainingCount - picked.length;
     const reserved = Math.min(Math.max(0, slotsLeft - 1) * 5, Math.max(0, budget - 5));
     // "More" uses spare capacity for deeper practice, without raising the
     // timetable allowance or adding an unbounded list of new actions.
     const deeperSession = load.budget >= 150 && !item.roadmapAction && !item.revisionStage && !item.eventStage;
-    const baseMinutes = deeperSession ? Math.min(item.category === 'academics' ? 60 : item.category === 'language' ? 45 : 30, Math.ceil(item.minutes * 2)) : item.minutes;
+    const baseMinutes = deeperSession ? Math.min(item.category === 'academics' ? 60 : item.category === 'language' ? 45 : 30, Math.ceil(item.minutes * (item.category === 'academics' ? 2.4 : 2))) : item.minutes;
     const requestedMinutes = load.effort === 'more' ? Math.ceil(baseMinutes * 1.2) : baseMinutes;
     const minutes = Math.min(requestedMinutes, budget - reserved);
     if (minutes < 5) continue;
@@ -663,11 +710,13 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
     const id = `plan-${date}-${item.key}`;
     const old = previous.get(id);
     const scaled = item.minutes < item.requestedMinutes;
+    const learningMetadata = ['academics', 'language'].includes(item.category) && !item.roadmapAction ? getTaskLearningMetadata(item, state, date) : item;
     return {
-      id, date, title: item.revisionStage === 'timed' && scaled ? `${subjectFor(state, item.subjectId)?.name || 'Exam'}: practise one timed exam section` : item.eventStage === 'rehearsal' && scaled ? `${item.title.split(':')[0]}: practise part of a timed test section` : item.title, category: item.category, subjectId: item.subjectId || '', examId: item.examId || '', goalId: item.goalId || '',
+      id, date, title: item.revisionStage === 'timed' && scaled ? `${subjectLabel(subjectFor(state, item.subjectId))}: eine Prüfungs-Teilaufgabe unter Zeitdruck üben` : item.eventStage === 'rehearsal' && scaled ? `${item.title.split(':')[0]}: einen zeitgebundenen Testabschnitt üben` : item.title, category: item.category, subjectId: item.subjectId || '', examId: item.examId || '', goalId: item.goalId || '',
       roadmapItemId: item.roadmapItemId || '', roadmapStepId: item.roadmapStepId || '', linkedGoal: item.linkedGoal || '', eventId: item.eventId || (item.examId ? `exam:${item.examId}` : ''), eventSourceId: item.eventSourceId || item.examId || '', eventStage: item.eventStage || '',
       minutes: item.minutes, priority: item.priority, reason: item.reason,
-      steps: scaled ? ['Use this short session for one small part of the exercise.', ...item.steps] : item.steps,
+      objective: learningMetadata.objective || item.title, expectedResult: learningMetadata.expectedResult || 'Ein überprüftes Ergebnis und ein konkreter nächster Schritt.', learningTopic: learningMetadata.learningTopic || '', ieltsSkill: item.ieltsSkill || '', reviewDate: item.reviewDate || '', movedFrom: '',
+      steps: scaled ? ['Nutze diese kurze Einheit für einen kleinen Teil der Aufgabe.', ...item.steps] : item.steps,
       resource: item.resource || '', completed: false, completedAt: null, notes: old?.notes || '', selfReview: old?.selfReview || [], origin: 'generated',
       revisionStage: item.revisionStage || '', revisionPlanId: item.revisionPlanId || '',
       planSignature: signature,
@@ -677,13 +726,13 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
     if (task.eventStage === 'rehearsal' && !task.completed && task.id !== activeTaskId) {
       const stage = getEventPlan(state, task.eventId, date).find(step => step.stage === 'rehearsal');
       const longest = Math.max(0, ...task.sessions.map(session => clockMinutes(session.end) - clockMinutes(session.start)));
-      if (stage && longest < (stage.requiredMinutes || stage.minutes)) return { ...task, title: `${task.title.split(':')[0]}: practise part of a timed test section`, steps: words([`This is section practice. The full timed milestone needs one uninterrupted ${stage.requiredMinutes || stage.minutes}-minute session.`, ...task.steps], 12) };
+      if (stage && longest < (stage.requiredMinutes || stage.minutes)) return { ...task, title: `${task.title.split(':')[0]}: einen zeitgebundenen Testabschnitt üben`, steps: words([`Das ist Teilaufgabenpraxis. Für den vollständigen Probedurchlauf brauchst du eine ununterbrochene ${stage.requiredMinutes || stage.minutes}-Minuten-Einheit.`, ...task.steps], 12) };
     }
     if (task.revisionStage !== 'timed' || task.completed || task.id === activeTaskId) return task;
     const stage = getExamPlan(state, task.examId, date).find(step => step.id === task.revisionPlanId);
     const longest = Math.max(0, ...task.sessions.map(session => clockMinutes(session.end) - clockMinutes(session.start)));
     if (!stage || longest >= stage.requiredMinutes) return task;
-    return { ...task, title: `${subjectFor(state, task.subjectId)?.name || 'Exam'}: practise one timed exam section`, steps: words(['This is a partial rehearsal. The full timed milestone still needs one uninterrupted session.', ...task.steps], 12) };
+    return { ...task, title: `${subjectLabel(subjectFor(state, task.subjectId))}: eine Prüfungs-Teilaufgabe unter Zeitdruck üben`, steps: words(['Das ist ein teilweiser Probedurchlauf. Für den vollständigen Vorbereitungsschritt ist weiter eine ununterbrochene Einheit nötig.', ...task.steps], 12) };
   });
   const reconsidered = new Set(existing.map(task => task.id));
   const tasks = [...state.tasks.filter(task => task.date !== date || (task.skipped && !reconsidered.has(task.id))), ...parked, ...located];
@@ -694,12 +743,12 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
 
 function planSignature(state, date) {
   const priorWeek = shiftDate(startOfWeek(date), -7);
-  const { schoolYear, schoolSystem, graduationYear, universityStartYear, applicationYear, pathways, targetFields, englishLevel, germanLevel, testPlans } = state.profile;
-  const planningProfile = { schoolYear, schoolSystem, graduationYear, universityStartYear, applicationYear, pathways, targetFields, englishLevel, germanLevel,
+  const { schoolYear, schoolSystem, graduationYear, universityStartYear, applicationYear, pathways, targetFields, englishLevel, germanLevel, testPlans, prioritySubjects } = state.profile;
+  const planningProfile = { schoolYear, schoolSystem, graduationYear, universityStartYear, applicationYear, pathways, targetFields, englishLevel, germanLevel, prioritySubjects,
     testPlans: (testPlans || []).map(({ id, name, status, targetDate, targetScore }) => ({ id, name, status, targetDate, targetScore })),
   };
   const input = canonicalJSON({
-    engineVersion: 5, date, profile: planningProfile, subjects: state.subjects, exams: state.exams,
+    engineVersion: 7, date, profile: planningProfile, subjects: state.subjects, grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), learning: normalizeLearning(state.learning),
     universities: state.universities, activities: state.activities, events: state.events || [], schedule: state.schedule,
     roadmapConfirmed: state.roadmapCompleted,
     // A Sunday review guides the following week. Reflection text, save time,
@@ -750,9 +799,9 @@ export function getDailyPlan(state, date, referenceDate = date) {
     const tasks = planned.tasks.filter(task => task.date === date);
     return {
       isHistory, tasks, availableMinutes: null, plannedMinutes: totalTaskMinutes(tasks.filter(task => !task.skipped)), remainingMinutes: null,
-      goal: 'Your saved study history',
-      adjustment: tasks.length ? 'These are the actions saved for this date. Past plans are preserved rather than recalculated from your current settings.' : 'No actions were saved for this date. History is not filled with new recommendations.',
-      goalChain: { longTerm: 'Your recorded work', monthly: 'Saved actions contribute to your monthly progress', weekly: 'Past work stays in history without creating a backlog' },
+      goal: 'Dein gespeicherter Lernverlauf',
+      adjustment: tasks.length ? 'Das sind deine gespeicherten Aufgaben für diesen Tag. Frühere Pläne bleiben erhalten und werden nicht mit heutigen Einstellungen neu berechnet.' : 'Für diesen Tag wurden keine Aufgaben gespeichert. Dein Verlauf wird nicht nachträglich mit Empfehlungen gefüllt.',
+      goalChain: { longTerm: 'Deine dokumentierte Arbeit', monthly: 'Gespeicherte Aufgaben zählen zu deinem Monatsfortschritt', weekly: 'Frühere Arbeit bleibt im Verlauf, ohne einen Aufgabenstau zu erzeugen' },
       freeWindows: [],
     };
   }
@@ -770,9 +819,9 @@ export function getDailyPlan(state, date, referenceDate = date) {
   const selectedPath = state.profile.pathways.find(path => top?.roadmapItemId.startsWith(`${path}-`)) || state.profile.pathways[0];
   return {
     isHistory, tasks, availableMinutes: availability.availableMinutes, plannedMinutes, remainingMinutes: Math.max(0, availability.availableMinutes - plannedMinutes),
-    goal: top ? top.examId && !top.title.includes(subjectFor(state, top.subjectId)?.name || 'Exam') ? `${subjectFor(state, top.subjectId)?.name || 'Exam'}: ${top.title.charAt(0).toLowerCase()}${top.title.slice(1)}` : top.title : 'Protect your rest and return with a clear plan',
-    adjustment: tasks.length > 5 ? 'More than five saved actions remain on this date. Move or remove a custom action to keep today focused.' : retainedOverBudget(tasks, availability.availableMinutes) ? 'Your saved tasks exceed today’s availability. Move or remove a custom task to make room.' : availability.availableMinutes === 0 ? 'No study time today. Fixed activities and rest take priority; your next day will be recalculated.' : load.effort === 'lighter' ? `${plannedMinutes > load.budget ? 'Your saved work already uses the lighter target; no extra actions were added.' : load.budget < availability.availableMinutes ? 'Your weekly review asked for a lighter week: the plan leaves a 20% study-time buffer.' : 'Your lighter week keeps today to one short action.'}${boost ? ` ${boost.reason}` : ''}` : load.effort === 'more' ? `Your weekly review asked for a little more: longer focused practice uses spare time within your ${availability.availableMinutes}-minute allowance.${boost ? ` ${boost.reason}` : ''}` : boost ? boost.reason : missed ? `${missed} unfinished action${missed === 1 ? '' : 's'} from yesterday informed a fresh plan. Nothing was added as a backlog.` : 'A focused plan based on your exams, grade goals, language practice and university profile.',
-    goalChain: { longTerm: goals.longTerm, yearly: goals.yearly.find(goal => goal.pathway === selectedPath)?.title || '', semester: goals.semester.find(goal => goal.pathway === selectedPath)?.title || '', monthly: linkedMonthly?.title || 'Build a repeatable study routine', weekly: linkedWeekly?.title || 'Complete a few focused sessions', roadmapItemId: top?.roadmapItemId || '', linkedGoal: top?.linkedGoal || '' },
+    goal: top ? top.objective || top.title : 'Erhole dich und starte danach mit einem klaren Plan',
+    adjustment: tasks.length > 5 ? 'Für diesen Tag sind mehr als fünf feste Aufgaben gespeichert. Verschiebe eine eigene Aufgabe, damit der Tag übersichtlich bleibt.' : retainedOverBudget(tasks, availability.availableMinutes) ? 'Deine festen Aufgaben überschreiten die verfügbare Zeit. Verschiebe eine eigene Aufgabe, um Raum zu schaffen.' : availability.availableMinutes === 0 ? 'Heute ist keine Lernzeit frei. Feste Termine und Erholung haben Vorrang; der nächste Tag wird passend geplant.' : load.effort === 'lighter' ? `${plannedMinutes > load.budget ? 'Deine feste Arbeit nutzt das reduzierte Ziel bereits aus. Es kommen keine zusätzlichen Aufgaben hinzu.' : load.budget < availability.availableMinutes ? 'Dein Wochenrückblick wünscht eine leichtere Woche: Der Plan lässt 20 % Lernzeit frei.' : 'Deine leichtere Woche begrenzt den Tag auf eine kurze Aufgabe.'}${boost ? ` ${boost.reason}` : ''}` : load.effort === 'more' ? `Dein Wochenrückblick wünscht etwas mehr: Längere Einheiten nutzen freie Zeit innerhalb deines ${availability.availableMinutes}-Minuten-Limits.${boost ? ` ${boost.reason}` : ''}` : boost ? boost.reason : missed ? `${missed} offene Aufgabe${missed === 1 ? '' : 'n'} von gestern ${missed === 1 ? 'fließt' : 'fließen'} in einen neuen Plan ein. Es entsteht kein Aufgabenstau.` : 'Ein fokussierter Plan aus Prüfungen, Notenzielen, Sprachübung und Studienvorbereitung.',
+    goalChain: { longTerm: goals.longTerm, yearly: goals.yearly.find(goal => goal.pathway === selectedPath)?.title || '', semester: goals.semester.find(goal => goal.pathway === selectedPath)?.title || '', monthly: linkedMonthly?.title || 'Eine verlässliche Lernroutine entwickeln', weekly: linkedWeekly?.title || 'Einige gezielte Lerneinheiten abschließen', roadmapItemId: top?.roadmapItemId || '', linkedGoal: top?.linkedGoal || '' },
     freeWindows: availability.freeWindows,
   };
 }
@@ -792,9 +841,9 @@ export function getGoals(state, date) {
   const upcomingExams = [...state.exams].filter(exam => exam.date >= date).sort((a, b) => a.date.localeCompare(b.date));
   const academicExam = upcomingExams.find(exam => !languageKind(subjectFor(state, exam.subjectId)));
   const languageExam = upcomingExams.find(exam => languageKind(subjectFor(state, exam.subjectId)));
-  const weakest = [...state.subjects].filter(subject => subject.enabled).sort((a, b) => subjectGap(b) - subjectGap(a))[0];
+  const weakest = subjectFor(state, getSubjectPriorities(state, date)[0]?.subjectId);
   const graduated = state.profile.schoolYear === 'Graduated';
-  const longTerm = `${graduated ? 'Build' : `Finish your Abitur in ${state.profile.graduationYear || 'your graduation year'} and build`} a strong, balanced ${state.profile.pathways.join(' + ') || 'university'} application in ${state.profile.targetFields.slice(0, 2).join(' / ') || 'a field you care about'}.`;
+  const longTerm = `${graduated ? 'Ein starkes Studienprofil entwickeln' : `Abitur ${state.profile.graduationYear || 'im geplanten Abschlussjahr'} abschließen`} und passende Studienoptionen für ${state.profile.pathways.map(path => path === 'Germany' ? 'Deutschland' : path).join(' + ') || 'deinen Studienweg'} in ${state.profile.targetFields.slice(0, 2).join(' / ') || 'deinem Wunschfeld'} vorbereiten.`;
   const priorities = getRoadmapPriorities(state, date);
   const roadmaps = state.profile.pathways.map(path => ({ path, phases: getRoadmap(state, path, date) }));
   const categoryItems = category => priorities.filter(item => item.category === category);
@@ -803,11 +852,11 @@ export function getGoals(state, date) {
   const academicSessions = Math.min(4, availableDays);
   const languageSessions = Math.min(3, availableDays);
   const templates = [
-    ...(graduated && !academicExam ? [] : [['grades', 'academics', academicExam ? `Prepare confidently for ${academicExam.title}` : `Move ${weakest?.name || 'your core subjects'} toward your target grade`, 'Use actual grade gaps, upcoming assessments and teacher feedback to choose the next academic action.', academicSessions * 4, academicSessions]]),
-    ['language', 'language', languageExam ? `Prepare confidently for ${languageExam.title}` : chosen('language')?.title || 'Improve English and German academic writing', `Build clear writing at your ${state.profile.englishLevel || 'current'} English level; use school feedback and verified language-test requirements.`, languageSessions * 4, languageSessions],
-    ['research', 'university', chosen('university')?.title || 'Keep your application requirements accurate', chosen('university')?.description || 'Verify the next real programme requirement, document or deadline.', 6, Math.min(2, availableDays)],
-    ['activities', 'activity', chosen('activity')?.title || 'Record sustained experience and new achievements', chosen('activity')?.description || 'Update meaningful responsibilities and real outcomes periodically.', 4, availableDays ? 1 : 0],
-    ['review', 'review', 'Adjust your plan through weekly reflection', 'Review completed work, identify the barrier and choose next week’s priorities.', 4, availableDays ? 1 : 0],
+    ...(graduated && !academicExam ? [] : [['grades', 'academics', academicExam ? `Gezielt auf ${academicExam.title} vorbereiten` : `${weakest ? subjectLabel(weakest) : 'Deine Kernfächer'} in Richtung Zielnote entwickeln`, 'Wähle den nächsten Lernschritt anhand echter Notenabstände, anstehender Leistungen und Lehrkraft-Feedback.', academicSessions * 4, academicSessions]]),
+    ['language', 'language', languageExam ? `Gezielt auf ${languageExam.title} vorbereiten` : chosen('language')?.title || 'Englisches und deutsches Schreiben stärken', `Schreibe klar auf deinem aktuellen Englischniveau und nutze Schulfeedback sowie geprüfte Sprachtestvorgaben.`, languageSessions * 4, languageSessions],
+    ['research', 'university', chosen('university')?.title || 'Bewerbungsvoraussetzungen aktuell halten', chosen('university')?.description || 'Prüfe die nächste tatsächliche Studiengangsvoraussetzung, Unterlage oder Frist.', 6, Math.min(2, availableDays)],
+    ['activities', 'activity', chosen('activity')?.title || 'Langfristige Erfahrung und echte neue Ergebnisse festhalten', chosen('activity')?.description || 'Aktualisiere sinnvolle Verantwortung und tatsächliche Ergebnisse gelegentlich.', 4, availableDays ? 1 : 0],
+    ['review', 'review', 'Den Plan mit einem Wochenrückblick anpassen', 'Prüfe deine abgeschlossene Arbeit, erkenne Hindernisse und wähle die nächsten Wochenschwerpunkte.', 4, availableDays ? 1 : 0],
   ];
   const periodGoals = (period, start, end, index) => templates.map(([id, category, title, description, monthTarget, weekTarget]) => {
     const recordedIds = new Set(state.tasks.filter(task => task.completed && completionDate(task) >= start && completionDate(task) <= end).map(task => task.roadmapItemId).filter(Boolean));
@@ -827,7 +876,7 @@ export function getGoals(state, date) {
       const actionTarget = Math.min(Math.max(1, target), Math.max(1, achievableSteps));
       stats = { completed: matching.length, target: actionTarget, progress: Math.min(100, Math.round(matching.length / actionTarget * 100)) };
     }
-    return { id: `${period}-${start}-${id}`, title: index === 'week' ? id === 'grades' ? `${target} focused academic sessions${weakest ? `, with attention to ${weakest.name}` : ''}` : id === 'language' ? `${target} focused language sessions with feedback` : id === 'research' ? due?.nextStep?.title || 'Verify the next university requirement or document' : id === 'activities' ? due?.nextStep?.title || 'Record one new activity contribution when due' : 'Save your Sunday review and next focus' : title,
+    return { id: `${period}-${start}-${id}`, title: index === 'week' ? id === 'grades' ? `${target} gezielte Lerneinheiten${weakest ? ` mit Schwerpunkt ${subjectLabel(weakest)}` : ''}` : id === 'language' ? `${target} gezielte Spracheinheiten mit Feedback` : id === 'research' ? due?.nextStep?.title || 'Die nächste Hochschulvoraussetzung oder Unterlage prüfen' : id === 'activities' ? due?.nextStep?.title || 'Bei Bedarf einen neuen eigenen Beitrag festhalten' : 'Sonntagsrückblick und nächsten Schwerpunkt speichern' : title,
       description, category, roadmapItemIds, pathway: due?.pathway || '', start, end, dueDate: due?.dueDate || end, nextAction: due?.nextStep?.title || '', ...stats };
   });
   const hierarchyGoal = (path, phases, period, start, end, selected) => {
@@ -838,9 +887,9 @@ export function getGoals(state, date) {
     const activeTransition = selected.some(phase => phase.key === 'university' && phase.start <= date);
     const finalSchoolYear = !graduated && selected.some(phase => phase.key === 'abitur');
     const applicationSeason = selected.some(phase => phase.key === 'applications');
-    const yearTitle = activeTransition ? `prepare enrolment and the ${date.slice(0, 4)} university transition` : finalSchoolYear ? `complete Abitur and prepare ${date.slice(0, 4)} admission decisions` : applicationSeason ? `prepare and verify your ${date.slice(0, 4)} applications` : graduated ? `prepare your next university application cycle` : selected.some(phase => phase.key === 'q3') ? `narrow programmes and verify ${date.slice(0, 4)} admission requirements` : `build Q1 grades, language and a sustained profile in ${date.slice(0, 4)}`;
-    return { id: `${period}-${path}-${start}`, pathway: path, category: 'university', title: `${path}: ${period === 'year' ? yearTitle : selected.map(phase => phase.label).join(' + ') || 'prepare the next university stage'}`,
-      description: next ? `Next priority: ${next.title}. ${next.description}` : 'Keep verified requirements current and confirm milestones only when actually achieved.', start, end, dueDate: next?.dueDate || end,
+    const yearTitle = activeTransition ? `Einschreibung und Studienstart ${date.slice(0, 4)} vorbereiten` : finalSchoolYear ? `Abitur abschließen und Zulassungsentscheidungen ${date.slice(0, 4)} vorbereiten` : applicationSeason ? `Bewerbungen ${date.slice(0, 4)} vorbereiten und prüfen` : graduated ? `die nächste Bewerbungsrunde vorbereiten` : selected.some(phase => phase.key === 'q3') ? `Studiengänge eingrenzen und Zulassungsvoraussetzungen ${date.slice(0, 4)} prüfen` : `Q1-Noten, Sprache und ein langfristiges Profil ${date.slice(0, 4)} entwickeln`;
+    return { id: `${period}-${path}-${start}`, pathway: path, category: 'university', title: `${path}: ${period === 'year' ? yearTitle : selected.map(phase => phase.label).join(' + ') || 'die nächste Studienphase vorbereiten'}`,
+      description: next ? `Nächster Schwerpunkt: ${next.title}. ${next.description}` : 'Halte geprüfte Anforderungen aktuell und bestätige Schritte erst, wenn sie wirklich erreicht sind.', start, end, dueDate: next?.dueDate || end,
       roadmapItemIds: items.map(item => item.id), completed: actionCompleted, target: actionTotal, progress: actionTotal ? Math.round(actionCompleted / actionTotal * 100) : 0,
       milestonesCompleted: items.filter(item => item.confirmed).length, milestonesTotal: items.length };
   };
@@ -893,10 +942,10 @@ export function getWeeklyReview(state, date = localDateKey()) {
     weekStart, weekEnd, completed: count, total, minutes: completed.reduce((sum, task) => sum + task.minutes, 0), measuredSeconds: measured.seconds, measuredSessions: measured.sessions,
     completionRate: total ? Math.min(100, Math.round(count / total * 100)) : 0,
     consistency: days.filter(day => day.completed > 0 || day.timedSeconds > 0).length,
-    strong: strongest ? `${strongest.subject.name} consistency` : 'Your first completed session will establish a baseline',
-    needsAttention: weakest ? `${weakest.subject.name}${weakest.subject.weakTopics[0] ? ` · ${weakest.subject.weakTopics[0]}` : ''}` : 'Keep the workload realistic and protect recovery',
+    strong: strongest ? `${subjectLabel(strongest.subject)} · regelmäßig geübt` : 'Deine erste abgeschlossene Einheit schafft einen Ausgangspunkt',
+    needsAttention: weakest ? `${subjectLabel(weakest.subject)}${weakest.subject.weakTopics[0] ? ` · ${weakest.subject.weakTopics[0]}` : ''}` : 'Realistisch planen und Erholung schützen',
     universityProgress: completed.filter(task => ['university', 'activity'].includes(task.category)).length,
-    days, adjustment: focused ? `Next week, prioritise a smaller, focused ${focused.name} session. Unfinished tasks will be recalculated rather than carried over.` : 'Keep a balanced week of school practice, language and profile building. Adjust your available time if the plan was too large.',
+    days, adjustment: focused ? `Plane nächste Woche eine kurze, gezielte Einheit für ${subjectLabel(focused)}. Offene Aufgaben bleiben im Verlauf; der neue Plan berücksichtigt deinen aktuellen Bedarf.` : 'Verbinde schulische Übung, Sprache und Bewerbungsprofil. Wenn die Woche zu voll war, passe deine verfügbare Zeit an.',
     saved: saved || null,
   };
 }
@@ -910,7 +959,7 @@ export function getProgress(state, date = localDateKey()) {
   while (completedDays.has(cursor) && streak < 10000) { streak++; cursor = shiftDate(cursor, -1); }
   return {
     weekly: getWeeklyReview(state, date),
-    subjects: state.subjects.filter(subject => subject.enabled).map(subject => ({ ...subject, current: currentGrade(subject), gap: currentGrade(subject) === null ? null : subjectGap(subject) })),
+    subjects: state.subjects.filter(subject => subject.enabled).map(subject => { const academic = calculateSubject(state, subject.id); return { ...subject, current: academic.average, gap: academic.gap, methodLabel: academic.methodLabel, trend: academic.trend }; }),
     exams: [...state.exams].filter(exam => exam.date >= date).sort((a, b) => a.date.localeCompare(b.date)).map(exam => {
       const plan = getExamPlan(state, exam.id, date);
       const completed = plan.filter(step => step.completed).length;
@@ -985,8 +1034,36 @@ export function saveTaskReview(state, id, criterionIds) { return { ...state, tas
 export function addTask(state, task) {
   const retained = state.tasks.filter(item => item.date === task.date && !item.skipped && (item.origin === 'custom' || item.completed || item.notes?.trim() || item.selfReview?.length || item.id === state.study?.active?.taskId));
   if (!task.id && retained.length >= 5) throw new TypeError('Keep today focused: move or remove an action before adding a sixth.');
-  const record = requireRecord(normalTask({ ...task, id: task.id || uid('task'), origin: 'custom', completed: false, completedAt: null }), 'A task needs a title and valid date.');
-  return replaceRecord(state, 'tasks', record);
+  const old = state.tasks.find(item => item.id === task.id);
+  const record = requireRecord(normalTask({ ...old, ...task, id: task.id || uid('task'), origin: 'custom', completed: old?.completed || false, completedAt: old?.completedAt || null }), 'A task needs a title and valid date.');
+  return { ...replaceRecord(state, 'tasks', record), dismissedTaskIds: old?.origin === 'generated' ? [...new Set([...(state.dismissedTaskIds || []), old.id])] : state.dismissedTaskIds };
+}
+/** Edits keep saved answers, notes, and completion evidence intact. */
+export function editTask(state, id, patch) {
+  const task = state.tasks.find(item => item.id === id);
+  if (!task) return state;
+  return addTask(state, { ...task, ...patch, id });
+}
+/** A deliberate move preserves the task ID and writing rather than cloning it. */
+export function moveTask(state, id, date) {
+  if (!isDateKey(date)) throw new TypeError('Wähle ein gültiges Datum.');
+  const task = state.tasks.find(item => item.id === id);
+  if (!task || task.date === date) return state;
+  if (task.completed) throw new TypeError('Abgeschlossene Aufgaben bleiben im Verlauf.');
+  if (state.study?.active?.taskId === id) throw new TypeError('Beende zuerst die aktive Lerneinheit.');
+  const retained = state.tasks.filter(item => item.date === date && !item.skipped && (item.origin === 'custom' || item.completed || item.notes?.trim() || item.selfReview?.length));
+  if (retained.length >= 5) throw new TypeError('An diesem Tag sind bereits fünf feste Aufgaben. Wähle einen anderen Tag.');
+  return { ...state,
+    tasks: state.tasks.map(item => item.id === id ? { ...item, date, origin: 'custom', movedFrom: item.movedFrom || item.date, skipped: false, sessions: [], start: '', end: '', planSignature: '' } : item),
+    dismissedTaskIds: task.origin === 'generated' ? [...new Set([...(state.dismissedTaskIds || []), id])] : state.dismissedTaskIds,
+  };
+}
+/** Keep the old action in history and select another action within the budget. */
+export function replaceTask(state, id) {
+  const task = state.tasks.find(item => item.id === id);
+  if (!task || task.completed) return state;
+  if (state.study?.active?.taskId === id) throw new TypeError('Beende zuerst die aktive Lerneinheit.');
+  return ensureDailyPlan(skipTask(state, id), task.date);
 }
 export function removeTask(state, id) {
   const removed = state.tasks.find(task => task.id === id);
@@ -1005,11 +1082,14 @@ export function addGrade(state, grade) {
   if (!state.subjects.some(subject => subject.id === grade.subjectId)) throw new TypeError('Choose an existing subject.');
   if (grade.points === '' || grade.points === null || grade.points === undefined || typeof grade.points === 'boolean' || !Number.isFinite(Number(grade.points)) || Number(grade.points) < 0 || Number(grade.points) > 15) throw new TypeError('Points must be between 0 and 15.');
   if (!isDateKey(grade.date)) throw new TypeError('A grade needs a valid date.');
-  const record = { id: grade.id || uid('grade'), subjectId: grade.subjectId, points: Number(grade.points), type: grade.type === 'oral' ? 'oral' : 'written', date: grade.date, note: text(grade.note, 3000) };
-  const next = replaceRecord(state, 'grades', record);
+  const old = state.grades.find(item => item.id === grade.id);
+  const record = requireRecord(normalizeAcademicGrade({ ...old, ...grade, id: grade.id || uid('grade'), points: Number(grade.points) }), 'Eine Note braucht Fach, Datum und 0–15 Punkte.');
+  let next = replaceRecord(state, 'grades', record);
+  if (old && (old.subjectId !== record.subjectId || old.type !== record.type)) next = recomputeGrades(next, old.subjectId, old.type);
   return recomputeGrades(next, record.subjectId, record.type);
 }
 function recomputeGrades(state, subjectId, type) {
+  if (!['written', 'oral'].includes(type)) return state;
   const records = state.grades.filter(grade => grade.subjectId === subjectId && grade.type === type);
   const average = records.length ? records.reduce((sum, grade) => sum + grade.points, 0) / records.length : null;
   return { ...state, subjects: state.subjects.map(subject => subject.id === subjectId ? { ...subject, [type]: average === null ? subject[type === 'oral' ? 'baselineOral' : 'baselineWritten'] ?? null : Math.round(average * 10) / 10 } : subject) };

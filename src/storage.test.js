@@ -38,7 +38,7 @@ test('a new installation opens the supplied personal profile and onboarding with
   assert.ok(result.data.tasks.length > 0);
   assert.ok(result.data.tasks.filter(task => task.date === TODAY).every((task) => !task.completed && !task.completedAt));
   assert.ok(result.data.tasks.every(task => !task.completed));
-  assert.equal(result.data.subjects.find(subject => subject.id === 'mathematics').written, 6);
+  assert.equal(result.data.subjects.find(subject => subject.id === 'mathematics').written, null);
   assert.equal(result.data.subjects.find(subject => subject.id === 'english').written, null);
   assert.equal(result.data.exams.length, 0);
   assert.equal(result.data.grades.length, 0);

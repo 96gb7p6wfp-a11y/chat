@@ -109,6 +109,9 @@ function validateProfile(profile, legacy = false) {
     choice(profile.theme, 'profile.theme', ['system', 'light', 'dark']);
     for (const field of ['englishLevel', 'germanLevel', 'theme']) text(profile[field], `profile.${field}`, { max: 300 });
     text(profile.academicGoalNotes, 'profile.academicGoalNotes', { max: 600 });
+    number(profile.targetAverage, 'profile.targetAverage', 0, 15);
+    choice(profile.language, 'profile.language', ['de', 'en']);
+    stringList(profile.prioritySubjects, 'profile.prioritySubjects', { max: 40, itemMax: 150, unique: true });
     list(profile.testPlans, 'profile.testPlans', (record, path) => {
       text(record.name, `${path}.name`, { required: true, max: 100 });
       date(record.targetDate, `${path}.targetDate`, { optional: true });
@@ -140,6 +143,11 @@ function validateGrade(grade, path, legacy = false) {
   number(grade.points, `${path}.points`, 0, 15, { optional: false });
   date(grade.date, `${path}.date`);
   text(grade.note, `${path}.note`, { max: 3000 });
+  if (!legacy) {
+    choice(grade.type, `${path}.type`, ['written', 'oral', 'participation', 'presentation', 'other']);
+    choice(grade.semester, `${path}.semester`, ['', 'Q1', 'Q2', 'Q3', 'Q4']);
+    number(grade.weight, `${path}.weight`, Number.EPSILON, 100000);
+  }
 }
 
 function validateLegacy(value) {
@@ -181,6 +189,12 @@ function validateCurrent(value) {
     text(record.revisionPlanId, `${path}.revisionPlanId`, { max: 220 });
     text(record.revisionStage, `${path}.revisionStage`, { max: 100 });
     text(record.planSignature, `${path}.planSignature`, { max: 100 });
+    text(record.objective, `${path}.objective`, { max: 500 });
+    text(record.learningTopic, `${path}.learningTopic`, { max: 300 });
+    text(record.expectedResult, `${path}.expectedResult`, { max: 700 });
+    choice(record.ieltsSkill, `${path}.ieltsSkill`, ['', 'listening', 'reading', 'writing', 'speaking']);
+    date(record.reviewDate, `${path}.reviewDate`, { optional: true });
+    text(record.movedFrom, `${path}.movedFrom`, { max: 200 });
     if (record.sessions !== undefined) {
       if (!Array.isArray(record.sessions) || record.sessions.length > 20) fail(`${path}.sessions must contain at most 20 study blocks.`);
       let previousEnd = -1;
@@ -207,6 +221,16 @@ function validateCurrent(value) {
     for (const field of ['written', 'oral', 'target', 'baselineWritten', 'baselineOral']) number(record[field], `${path}.${field}`, 0, 15);
     stringList(record.weakTopics, `${path}.weakTopics`, { max: 40, itemMax: 200, unique: true });
     boolean(record.enabled, `${path}.enabled`);
+    choice(record.priority, `${path}.priority`, ['auto', 'high', 'low']);
+    choice(record.priorityOverride, `${path}.priorityOverride`, ['auto', 'high', 'low']);
+    number(record.difficulty, `${path}.difficulty`, 1, 5);
+    if (record.grading !== undefined) {
+      if (!object(record.grading)) fail(`${path}.grading must be an object.`);
+      choice(record.grading.mode, `${path}.grading.mode`, ['simple', 'weighted', 'category'], { optional: false });
+      number(record.grading.courseWeight, `${path}.grading.courseWeight`, Number.EPSILON, 100000);
+      if (!object(record.grading.weights)) fail(`${path}.grading.weights must be an object.`);
+      for (const type of ['written', 'oral', 'participation', 'presentation', 'other']) number(record.grading.weights[type], `${path}.grading.weights.${type}`, Number.EPSILON, 100000);
+    }
   });
   list(value.grades, 'grades', validateGrade);
   list(value.exams, 'exams', (record, path) => {
@@ -218,6 +242,10 @@ function validateCurrent(value) {
     text(record.format, `${path}.format`, { max: 200 });
     choice(record.format, `${path}.format`, ['written', 'oral', 'test', 'practical']);
     number(record.target, `${path}.target`, 0, 15);
+    if (record.time) time(record.time, `${path}.time`);
+    choice(record.importance, `${path}.importance`, ['low', 'normal', 'high']);
+    text(record.notes, `${path}.notes`, { max: 4000 });
+    text(record.preparation, `${path}.preparation`, { max: 4000 });
   });
   list(value.activities, 'activities', (record, path) => {
     text(record.name, `${path}.name`, { required: true, max: 300 });
@@ -230,6 +258,14 @@ function validateCurrent(value) {
     number(record.weeksPerYear, `${path}.weeksPerYear`, 0, 52, { integer: true });
     for (const field of ['description', 'achievements', 'responsibilities', 'notes']) text(record[field], `${path}.${field}`, { max: 4000 });
     text(record.impact, `${path}.impact`, { max: 2000 });
+    choice(record.evidenceStatus, `${path}.evidenceStatus`, ['self-reported', 'verified', 'planned']);
+    webAddress(record.projectUrl, `${path}.projectUrl`, 1200);
+    list(record.evidence, `${path}.evidence`, (evidence, evidencePath) => {
+      text(evidence.label, `${evidencePath}.label`, { max: 300 });
+      webAddress(evidence.url, `${evidencePath}.url`, 1200);
+      text(evidence.note, `${evidencePath}.note`, { max: 2000 });
+      date(evidence.verifiedDate, `${evidencePath}.verifiedDate`, { optional: true });
+    }, { optional: true, max: 100 });
   });
   // New custom milestones are optional in old v2 backups. Existing exams,
   // university deadlines and test plans remain in their canonical collections.
@@ -248,6 +284,10 @@ function validateCurrent(value) {
     text(record.notes, `${path}.notes`, { max: 4000 });
     text(record.goalId, `${path}.goalId`, { max: 200 });
     webAddress(record.resource, `${path}.resource`);
+    if (record.time) time(record.time, `${path}.time`);
+    text(record.subjectId, `${path}.subjectId`, { max: 150 });
+    stringList(record.topics, `${path}.topics`, { max: 40, itemMax: 200, unique: true });
+    text(record.preparation, `${path}.preparation`, { max: 4000 });
   }, { optional: true });
   list(value.universities, 'universities', (record, path) => {
     text(record.name, `${path}.name`, { required: true, max: 300 });
@@ -258,6 +298,9 @@ function validateCurrent(value) {
     text(record.program, `${path}.program`, { max: 300 });
     for (const field of ['requirements', 'notes']) text(record[field], `${path}.${field}`, { max: 4000 });
     text(record.url, `${path}.url`, { max: 1200 });
+    choice(record.requirementsStatus, `${path}.requirementsStatus`, ['general', 'verified']);
+    webAddress(record.requirementsSource, `${path}.requirementsSource`, 1200);
+    date(record.requirementsCheckedDate, `${path}.requirementsCheckedDate`, { optional: true });
     if (record.url) {
       try { if (!['https:', 'http:'].includes(new URL(record.url).protocol)) fail(`${path}.url must use HTTPS or HTTP.`); }
       catch { fail(`${path}.url is not a supported web address.`); }
@@ -285,6 +328,49 @@ function validateCurrent(value) {
   stringList(value.dismissedTaskIds, 'dismissedTaskIds', { optional: false, max: 3000, itemMax: 200, unique: true });
   validateSchedule(value.schedule);
   validateStudy(value.study);
+  validateIELTS(value.ielts);
+  validateLearning(value.learning);
+}
+
+function validateIELTS(value) {
+  if (value === undefined) return;
+  if (!object(value)) fail('ielts must be an object.');
+  boolean(value.enabled, 'ielts.enabled');
+  date(value.examDate, 'ielts.examDate', { optional: true });
+  number(value.weeklyMinutes, 'ielts.weeklyMinutes', 0, 840, { integer: true });
+  const band = (score, path) => {
+    number(score, path, 0, 9);
+    if (score != null && score !== '' && !Number.isInteger(score * 2)) fail(`${path} must use whole or half bands.`);
+  };
+  band(value.targetOverall, 'ielts.targetOverall');
+  for (const field of ['targets', 'estimates']) {
+    if (!object(value[field])) fail(`ielts.${field} must be an object.`);
+    for (const skill of ['listening', 'reading', 'writing', 'speaking']) band(value[field][skill], `ielts.${field}.${skill}`);
+  }
+  if (!object(value.mistakes)) fail('ielts.mistakes must be an object.');
+  for (const skill of ['listening', 'reading', 'writing', 'speaking']) text(value.mistakes[skill], `ielts.mistakes.${skill}`, { max: 2000 });
+  list(value.scores, 'ielts.scores', (score, path) => {
+    date(score.date, `${path}.date`);
+    choice(score.source, `${path}.source`, ['official', 'mock', 'self'], { optional: false });
+    if (!object(score.skills)) fail(`${path}.skills must be an object.`);
+    for (const skill of ['listening', 'reading', 'writing', 'speaking']) band(score.skills[skill], `${path}.skills.${skill}`);
+    band(score.overall, `${path}.overall`);
+    text(score.notes, `${path}.notes`, { max: 4000 });
+  });
+}
+
+function validateLearning(value) {
+  if (value === undefined) return;
+  if (!object(value)) fail('learning must be an object.');
+  list(value.attempts, 'learning.attempts', (attempt, path) => {
+    for (const field of ['taskId', 'subjectId', 'questionId']) text(attempt[field], `${path}.${field}`, { max: 200 });
+    text(attempt.topic, `${path}.topic`, { required: true, max: 200 });
+    text(attempt.answer, `${path}.answer`, { max: 20000 });
+    text(attempt.mistake, `${path}.mistake`, { max: 2000 });
+    date(attempt.date, `${path}.date`);
+    date(attempt.nextReviewDate, `${path}.nextReviewDate`);
+    choice(attempt.rating, `${path}.rating`, ['again', 'hard', 'good'], { optional: false });
+  });
 }
 
 function studyTimestamp(value, name) {
@@ -386,6 +472,16 @@ function validateSchedule(schedule) {
     date(record.date, `${path}.date`);
     number(record.minutes, `${path}.minutes`, 0, 720, { optional: false, integer: true });
   }, { key: 'date' });
+  date(schedule.cycleAnchor, 'schedule.cycleAnchor', { optional: true });
+  list(schedule.lessons, 'schedule.lessons', (lesson, path) => {
+    text(lesson.subjectId, `${path}.subjectId`, { max: 150 });
+    text(lesson.title, `${path}.title`, { max: 300 });
+    number(lesson.day, `${path}.day`, 0, 6, { optional: false, integer: true });
+    if (time(lesson.end, `${path}.end`) <= time(lesson.start, `${path}.start`)) fail(`${path} must end after it starts.`);
+    text(lesson.room, `${path}.room`, { max: 150 });
+    text(lesson.teacher, `${path}.teacher`, { max: 150 });
+    choice(lesson.cycle, `${path}.cycle`, ['all', 'A', 'B'], { optional: false });
+  }, { optional: true, max: 1000 });
 }
 
 function assertRetained(source, normalized, legacy = false) {
@@ -437,6 +533,23 @@ function assertRetained(source, normalized, legacy = false) {
     fail('the previous academic goal cannot be restored accurately.');
   }
   if (!legacy) {
+    // Additive v2 data must survive older installations and backup restoration.
+    // Validate before normalization, then reject anything the normalizer lost.
+    for (const key of ['ielts', 'learning']) if (source[key] !== undefined) assertNewDataRetained(source[key], normalized[key], key);
+    for (const key of ['targetAverage', 'language', 'prioritySubjects']) if (source.profile[key] !== undefined) assertNewDataRetained(source.profile[key], normalized.profile[key], `profile.${key}`);
+    if (source.schedule.cycleAnchor !== undefined) assertNewDataRetained(source.schedule.cycleAnchor, normalized.schedule.cycleAnchor, 'schedule.cycleAnchor');
+    if (source.schedule.lessons !== undefined) assertNewDataRetained(source.schedule.lessons, normalized.schedule.lessons, 'schedule.lessons');
+    for (const [collection, keys] of [
+      ['subjects', ['grading', 'priority', 'difficulty']],
+      ['grades', ['semester', 'weight', 'type']],
+      ['activities', ['evidenceStatus', 'evidence', 'projectUrl']],
+      ['universities', ['requirementsStatus', 'requirementsSource', 'requirementsCheckedDate']],
+      ['tasks', ['objective', 'expectedResult', 'learningTopic', 'ieltsSkill', 'reviewDate', 'movedFrom']],
+      ['exams', ['time', 'importance', 'notes', 'preparation']],
+    ]) for (const record of source[collection] || []) {
+      const restored = normalized[collection].find(item => item.id === record.id);
+      for (const key of keys) if (record[key] !== undefined) assertNewDataRetained(record[key], restored?.[key], `${collection}.${record.id}.${key}`);
+    }
     if (source.study !== undefined) {
       if (normalized.study.sessions.length !== source.study.sessions.length || normalized.study.active?.id !== source.study.active?.id) {
         fail('study sessions cannot be restored accurately.');
@@ -473,6 +586,16 @@ function assertRetained(source, normalized, legacy = false) {
   return normalized;
 }
 
+function assertNewDataRetained(source, restored, path) {
+  if (Array.isArray(source)) {
+    if (!Array.isArray(restored) || source.length !== restored.length) fail(`${path} cannot be restored without losing records.`);
+    source.forEach((item, index) => assertNewDataRetained(item, restored[index], `${path}[${index}]`));
+  } else if (object(source)) {
+    if (!object(restored)) fail(`${path} cannot be restored accurately.`);
+    for (const [key, value] of Object.entries(source)) if (value !== undefined) assertNewDataRetained(value, restored[key], `${path}.${key}`);
+  } else if (source !== restored && !(typeof source === 'string' && source.trim() === restored)) fail(`${path} cannot be restored accurately.`);
+}
+
 /** Import checks every source record before normalization can discard it. */
 export function parseBackup(content, today) {
   if (typeof content !== 'string') fail('the backup must contain JSON text.');
@@ -491,7 +614,10 @@ export function parseBackup(content, today) {
 
 /** Plain, portable JSON; no local storage metadata or device identifiers. */
 export function serializeBackup(data) {
-  const content = JSON.stringify(data, null, 2);
+  const content = JSON.stringify(data, (key, value) => {
+    if (typeof value === 'number' && !Number.isFinite(value)) fail('a numeric value is not finite.');
+    return value;
+  }, 2);
   parseBackup(content, data?.createdDate);
   return content;
 }

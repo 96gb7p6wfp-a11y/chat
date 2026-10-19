@@ -3,7 +3,7 @@
  * personal milestones. Calendar entries do not duplicate their source data.
  * Event minutes describe a preparation action, never the duration of an event.
  */
-export const EVENT_TYPES = ['internship', 'project', 'application', 'university', 'test', 'appointment'];
+export const EVENT_TYPES = ['internship', 'project', 'application', 'university', 'test', 'appointment', 'oral', 'presentation', 'homework'];
 export const EVENT_PATHWAYS = ['USA', 'Germany', 'Both'];
 export const EVENT_INTENTS = ['deadline', 'start', 'milestone'];
 const DAY = 86400000;
@@ -11,6 +11,7 @@ const string = (value, max = 2000) => typeof value === 'string' ? value.trim().s
 const records = value => Array.isArray(value) ? value.slice(0, 10000) : [];
 const identifier = () => `event-${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`}`;
 const standardizedTest = name => /\b(?:sat|act)\b/i.test(name);
+const validTime = value => typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 
 function candidateId(value) {
   if (value.length <= 110) return value;
@@ -43,7 +44,7 @@ function webURL(value) {
   if (!url) return '';
   try { return ['http:', 'https:'].includes(new URL(url).protocol) ? url : ''; } catch { return ''; }
 }
-function intentFor(type) { return type === 'internship' ? 'start' : ['project', 'application', 'university'].includes(type) ? 'deadline' : 'milestone'; }
+function intentFor(type) { return type === 'internship' ? 'start' : ['project', 'application', 'university', 'homework'].includes(type) ? 'deadline' : 'milestone'; }
 function normalizeEvent(event) {
   if (!event || typeof event !== 'object' || !string(event.id, 200) || !string(event.title, 300) || !validDate(event.date)) return null;
   const type = EVENT_TYPES.includes(event.type) ? event.type : 'project';
@@ -57,6 +58,9 @@ function normalizeEvent(event) {
     minutes: Number.isFinite(minutes) && event.minutes !== '' && event.minutes !== null ? Math.max(5, Math.min(120, Math.round(minutes))) : 20,
     priority: ['high', 'medium', 'low'].includes(event.priority) ? event.priority : 'medium',
     status: event.status === 'completed' ? 'completed' : 'planned', notes: string(event.notes, 4000),
+    time: validTime(event.time) ? event.time : '', subjectId: string(event.subjectId, 150),
+    topics: [...new Set(records(event.topics).map(topic => string(topic, 200)).filter(Boolean))].slice(0, 30),
+    preparation: string(event.preparation, 2500),
     goalId: string(event.goalId, 200), resource: webURL(event.resource),
   };
 }
@@ -79,6 +83,7 @@ export function saveEvent(state, value) {
   if (!validDate(input.date)) throw new TypeError('Choose a valid event date.');
   if (input.endDate && (!validDate(input.endDate) || input.endDate < input.date)) throw new TypeError('The end date must be on or after the event date.');
   if (input.resource && !webURL(input.resource)) throw new TypeError('Use a full HTTP or HTTPS resource address.');
+  if (input.time && !validTime(input.time)) throw new TypeError('Choose a valid event time.');
   const event = normalizeEvent(input);
   return { ...state, events: [...normalizeEvents(state.events).filter(item => item.id !== id), event] };
 }
@@ -104,17 +109,19 @@ export function getUpcomingEvents(state, date, { includePast = false, includeCom
   const events = [];
   for (const exam of records(state.exams)) {
     if (!validDate(exam?.date)) continue;
-    events.push({ id: `exam:${exam.id}`, source: 'exam', sourceId: exam.id, title: exam.title, type: 'exam', date: exam.date, endDate: '', intent: 'milestone', pathway: 'Both', subjectId: exam.subjectId || '', minutes: 25, priority: 'high', status: 'planned', notes: records(exam.topics).join(', '), resource: '', format: exam.format || 'written', goalId: 'grades' });
+    events.push({ id: `exam:${exam.id}`, source: 'exam', sourceId: exam.id, title: exam.title, type: 'exam', date: exam.date, time: validTime(exam.time) ? exam.time : '', endDate: '', intent: 'milestone', pathway: 'Both', subjectId: exam.subjectId || '', minutes: 25, priority: exam.importance === 'low' ? 'low' : 'high', status: 'planned', notes: [records(exam.topics).join(', '), string(exam.notes, 4000)].filter(Boolean).join('\n'), preparation: string(exam.preparation, 2500), resource: '', format: exam.format || 'written', goalId: 'grades' });
   }
   for (const test of records(state.profile?.testPlans)) {
     if (!validDate(test?.targetDate)) continue;
+    if (/ielts/i.test(test.name || '') && validDate(state.ielts?.examDate) && test.targetDate === state.ielts.examDate) continue;
     events.push({ id: `test:${test.id}`, source: 'test', sourceId: test.id, title: preparingTest(test.status) || finishedTest(test.status) ? test.name : `${test.name}: requirement decision`, type: 'test', date: test.targetDate, endDate: '', intent: preparingTest(test.status) ? 'milestone' : 'deadline', pathway: standardizedTest(test.name) ? 'USA' : 'Both', subjectId: '', minutes: 25, priority: preparingTest(test.status) ? 'high' : 'low', status: finishedTest(test.status) ? 'completed' : 'planned', preparationStatus: string(test.status, 100), notes: string(test.notes, 2000), resource: testResource(test.name), goalId: 'tests', testName: test.name });
   }
+  if (validDate(state.ielts?.examDate)) events.push({ id: 'ielts:academic', source: 'ielts', sourceId: 'academic', title: 'IELTS Academic', type: 'test', date: state.ielts.examDate, endDate: '', intent: 'milestone', pathway: 'Both', subjectId: '', minutes: 25, priority: 'high', status: 'planned', notes: '', resource: testResource('IELTS'), goalId: 'tests', testName: 'IELTS Academic' });
   for (const university of records(state.universities)) {
     if (!validDate(university?.deadline)) continue;
     events.push({ id: `university:${university.id}`, source: 'university', sourceId: university.id, title: `${university.name}: application deadline`, type: 'university', date: university.deadline, endDate: '', intent: 'deadline', pathway: university.country === 'Germany' ? 'Germany' : 'USA', subjectId: '', minutes: 20, priority: 'high', status: university.status === 'applied' ? 'completed' : 'planned', notes: string(university.requirements, 4000), resource: webURL(university.url), goalId: 'applications', universityName: university.name });
   }
-  for (const event of normalizeEvents(state.events)) events.push({ ...event, id: `custom:${event.id}`, source: 'custom', sourceId: event.id, subjectId: '' });
+  for (const event of normalizeEvents(state.events)) events.push({ ...event, id: `custom:${event.id}`, source: 'custom', sourceId: event.id });
   return events.map(event => ({ ...event, daysUntil: calendarNumber(event.date) - today }))
     .filter(event => (includePast || event.daysUntil >= 0) && (includeCompleted || event.status !== 'completed') && (!pathway || event.pathway === 'Both' || event.pathway === pathway))
     .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
@@ -125,13 +132,24 @@ function matchesPathway(state, event) {
   return event.pathway === 'Both' || selected.includes(event.pathway);
 }
 function goalFor(event) {
-  return event.goalId || (['internship', 'project'].includes(event.type) ? 'activities' : event.type === 'test' ? 'tests' : ['application', 'university'].includes(event.type) ? 'applications' : 'research');
+  return event.goalId || (['oral', 'presentation', 'homework'].includes(event.type) ? 'grades' : ['internship', 'project'].includes(event.type) ? 'activities' : event.type === 'test' ? 'tests' : ['application', 'university'].includes(event.type) ? 'applications' : 'research');
 }
 
 function preparationStages(event) {
   const name = event.universityName || event.testName || event.title;
   const test = event.source === 'test' || event.type === 'test';
   const deadline = ['application', 'university'].includes(event.type);
+  if (['oral', 'presentation', 'homework'].includes(event.type)) {
+    const topic = event.topics?.length ? event.topics.join(', ') : 'die noch zu bestätigenden Aufgaben und Themen';
+    const preparation = event.preparation || 'Prüfe die genaue Aufgabenstellung und die Kriterien deiner Lehrkraft.';
+    const oral = event.type === 'oral';
+    return [
+      { stage: 'understand', before: 10, title: `${name}: Auftrag und Material klären`, minutes: 15, steps: [`Sammle Material für ${topic}.`, preparation, 'Notiere genau ein Ergebnis, das du abgeben oder erklären können musst.'] },
+      { stage: 'practice', before: 5, title: `${name}: ${oral ? 'Antworten laut üben' : event.type === 'presentation' ? 'Vortrag strukturieren' : 'Aufgabe bearbeiten'}`, minutes: event.minutes, steps: [oral ? 'Beantworte drei eigene Fragen laut ohne Unterlagen.' : event.type === 'presentation' ? 'Erstelle eine klare Gliederung und belege die Hauptaussagen.' : 'Bearbeite den wichtigsten noch offenen Teil der Aufgabenstellung.', preparation, 'Markiere eine Unsicherheit und kläre sie mit Material oder Lehrkraft.'] },
+      { stage: 'review', before: 1, title: `${name}: Ergebnis prüfen`, minutes: 15, steps: [oral ? 'Simuliere eine kurze mündliche Antwort und verbessere eine unklare Erklärung.' : 'Prüfe Ergebnis, Quellen und Abgabeformat anhand der Vorgaben.', 'Halte Materialien bereit und bestätige Datum und Uhrzeit.'] },
+      { stage: 'today', before: 0, title: `${name}: ${oral ? 'ruhig wiederholen' : 'Abgabe bestätigen'}`, minutes: 10, steps: [oral ? 'Wiederhole nur deine wichtigsten Stichpunkte.' : 'Prüfe die Abgabe und bewahre eine Kopie auf.', 'Markiere den Termin erst als erledigt, wenn er tatsächlich abgeschlossen ist.'] },
+    ];
+  }
   if (test) return [
     { stage: 'baseline', before: 30, title: `${name}: identify your weakest test section`, minutes: 25, steps: ['Use a short official sample to identify one weak section.', 'Record your baseline and choose a preparation focus.'] },
     { stage: 'practice', before: 14, title: `${name}: practise one weak section`, minutes: 25, steps: ['Complete a short official practice task.', 'Review every error and record the next action.'] },
@@ -168,8 +186,8 @@ function preparationStages(event) {
 /** An inspectable, dated preparation sequence; completion reflects actual tasks. */
 export function getEventPlan(state, eventId, date) {
   const event = getUpcomingEvents(state, date, { includePast: true, includeCompleted: true }).find(item => item.id === eventId);
-  if (!event || event.source === 'exam' || (event.source === 'test' && !preparingTest(event.preparationStatus))) return [];
-  const stages = preparationStages(event);
+  if (!event || event.source === 'exam' || event.source === 'ielts' || (event.source === 'test' && !preparingTest(event.preparationStatus))) return [];
+  const stages = preparationStages(event).map(stage => ({ ...stage, steps: [...stage.steps, ...(event.preparation && !stage.steps.includes(event.preparation) ? [event.preparation] : [])] }));
   return stages.map(stage => {
     const tasks = records(state.tasks).filter(task => task.eventId === event.id && task.eventStage === stage.stage && task.completed && completionDate(task) && completionDate(task) <= date);
     const practiceMinutes = tasks.reduce((sum, task) => sum + (Number(task.minutes) || 0), 0);
@@ -196,13 +214,13 @@ export function getEventCandidates(state, date) {
   calendarNumber(date);
   const candidates = [];
   const priorCompletionState = { ...state, tasks: records(state.tasks).map(task => task.completed && completionDate(task) >= date ? { ...task, completed: false } : task) };
-  const events = getUpcomingEvents(state, date).filter(event => event.source !== 'exam' && matchesPathway(state, event));
+  const events = getUpcomingEvents(state, date).filter(event => !['exam', 'ielts'].includes(event.source) && matchesPathway(state, event));
   const add = (event, stage, score, reason) => candidates.push({
     key: event.source === 'university' ? `deadline-${candidateId(event.sourceId)}-${stage.stage}` : `event-${event.source}-${candidateId(event.sourceId)}-${stage.stage}`,
-    title: string(stage.title, 300), category: event.type === 'test' && !standardizedTest(event.testName || event.title) ? 'language' : event.type === 'internship' || event.type === 'project' ? 'activity' : 'university',
+    title: string(stage.title, 300), category: ['oral', 'presentation', 'homework'].includes(event.type) ? 'academics' : event.type === 'test' && !standardizedTest(event.testName || event.title) ? 'language' : event.type === 'internship' || event.type === 'project' ? 'activity' : 'university',
     minutes: Math.max(5, stage.remainingMinutes || stage.minutes), score, priority: score >= 80 ? 'high' : score >= 40 ? 'medium' : 'low',
     reason: string(reason, 1200), steps: stage.steps, resource: event.resource, goalId: goalFor(event),
-    eventId: event.id, eventSourceId: event.sourceId, eventStage: stage.stage,
+    eventId: event.id, eventSourceId: event.sourceId, eventStage: stage.stage, subjectId: event.subjectId || '',
   });
   for (const event of events) {
     if (event.daysUntil > 60) continue;

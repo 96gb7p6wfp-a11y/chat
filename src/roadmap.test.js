@@ -11,16 +11,16 @@ test('US applications overlap Q3 and precede Abitur; German applications use the
   const usa = getRoadmap(state, 'USA', TODAY);
   const germany = getRoadmap(state, 'Germany', TODAY);
   const phase = (roadmap, label) => roadmap.find(item => item.label === label);
-  assert.equal(phase(usa, 'Applications').start, '2027-08-01');
-  assert.ok(phase(usa, 'Applications').start < phase(usa, 'Abitur').start);
-  assert.ok(phase(usa, 'Admission').start < phase(usa, 'Abitur').end);
-  assert.equal(phase(germany, 'Applications').start, '2028-05-01');
-  assert.equal(phase(germany, 'Admission').start, '2028-08-01');
+  assert.equal(phase(usa, 'Bewerbungen').start, '2027-08-01');
+  assert.ok(phase(usa, 'Bewerbungen').start < phase(usa, 'Abitur').start);
+  assert.ok(phase(usa, 'Zulassung').start < phase(usa, 'Abitur').end);
+  assert.equal(phase(germany, 'Bewerbungen').start, '2028-05-01');
+  assert.equal(phase(germany, 'Zulassung').start, '2028-08-01');
   for (const roadmap of [usa, germany]) {
-    assert.equal(roadmap[0].label, 'Today');
-    assert.ok(roadmap.some(item => item.label === 'Abitur preparation'));
-    assert.ok(roadmap.some(item => item.label === 'University preparation'));
-    assert.ok(roadmap.some(item => item.label === 'Admission'));
+    assert.equal(roadmap[0].label, 'Heute');
+    assert.ok(roadmap.some(item => item.label === 'Abiturvorbereitung'));
+    assert.ok(roadmap.some(item => item.label === 'Studienvorbereitung'));
+    assert.ok(roadmap.some(item => item.label === 'Zulassung'));
     for (let i = 2; i < roadmap.length; i++) assert.ok(roadmap[i - 1].start <= roadmap[i].start);
   }
 });
@@ -32,7 +32,7 @@ test('selected pathways control priorities while both roadmaps remain inspectabl
   assert.ok(priorities.every(item => item.pathway === 'Germany'));
   assert.ok(getRoadmap(state, 'USA', TODAY).length > 0);
   assert.ok(priorities.every(item => item.planningStart <= TODAY && item.nextStep && !item.completed));
-  assert.ok(priorities.every(item => !['Admission', 'University', 'Applications'].includes(item.phaseLabel)));
+  assert.ok(priorities.every(item => !['Zulassung', 'Studium', 'Bewerbungen'].includes(item.phaseLabel)));
 });
 
 test('a saved official application date replaces a preparation target without inventing dates', () => {
@@ -53,20 +53,20 @@ test('school year influences preparation choices without changing the calendar o
   assert.equal(roadmap.find(phase => phase.label === 'Q1').status, 'current');
   assert.equal(roadmap.find(phase => phase.label === 'Q2').status, 'upcoming');
   assert.ok(getRoadmapPriorities(state, TODAY).some(item => item.phaseLabel === 'Q2'));
-  assert.ok(getRoadmapPriorities(state, TODAY).every(item => item.phaseLabel !== 'Admission'));
+  assert.ok(getRoadmapPriorities(state, TODAY).every(item => item.phaseLabel !== 'Zulassung'));
   assert.ok(roadmap.flatMap(phase => phase.items).every(item => !item.completed));
 });
 
 test('completed actions require their full estimated work and never confirm an admission milestone', () => {
   let state = personal();
-  const item = getRoadmap(state, 'USA', '2028-04-01').find(phase => phase.label === 'Admission').items[0];
+  const item = getRoadmap(state, 'USA', '2028-04-01').find(phase => phase.label === 'Zulassung').items[0];
   state.tasks = [{ id: 'partial', title: item.nextStep.title, date: '2028-04-01', completed: true, completedAt: '2028-04-01T12:00:00Z', minutes: 5, roadmapItemId: item.id, roadmapStepId: item.nextStep.id }];
-  let after = getRoadmap(state, 'USA', '2028-04-01').find(phase => phase.label === 'Admission').items[0];
+  let after = getRoadmap(state, 'USA', '2028-04-01').find(phase => phase.label === 'Zulassung').items[0];
   assert.equal(after.completedSteps, 0);
   assert.equal(after.steps[0].remainingMinutes, 10);
   assert.ok(after.actionProgress > 0);
   state.tasks.push({ ...state.tasks[0], id: 'finish', minutes: 10 });
-  after = getRoadmap(state, 'USA', '2028-04-02').find(phase => phase.label === 'Admission').items[0];
+  after = getRoadmap(state, 'USA', '2028-04-02').find(phase => phase.label === 'Zulassung').items[0];
   assert.equal(after.completedSteps, 1);
   assert.notEqual(after.nextStep.id, item.nextStep.id);
   assert.equal(after.completed, false);
@@ -96,5 +96,5 @@ test('partial edits to an earlier application cycle never reverse a displayed ph
 
 test('without a saved activity the next action asks for a real choice rather than inventing an activity name', () => {
   const activities = getRoadmap(personal(), 'USA', TODAY).flatMap(phase => phase.items).find(item => item.id === 'USA-q1-activities');
-  assert.equal(activities.nextStep.title, 'Choose one activity and record your responsibilities');
+  assert.equal(activities.nextStep.title, 'Eine Aktivität wählen und die eigene Verantwortung festhalten');
 });

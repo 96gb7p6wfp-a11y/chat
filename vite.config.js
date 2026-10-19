@@ -6,4 +6,13 @@ if (!/^\/(?:[A-Za-z0-9_-]+\/)*$/.test(base)) {
   throw new Error('NORTHSTAR_BASE_PATH must be / or a slash-delimited path with a trailing slash, such as /chat/.');
 }
 
-export default defineConfig({ base });
+export default defineConfig({
+  base,
+  build: {
+    rollupOptions: {
+      // Stable library bytes can stay cached when the coaching content changes.
+      // Both entry chunks remain discoverable by the offline shell installer.
+      output: { manualChunks: id => id.includes('/node_modules/') ? 'vendor' : undefined },
+    },
+  },
+});

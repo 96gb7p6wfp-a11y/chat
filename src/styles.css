@@ -417,7 +417,11 @@ input[type='date'],input[type='time'] { max-width:100%; }
 .bottom-nav > button { min-width:0;overflow-wrap:anywhere; }
 .card h1,.card h2,.card h3,.modal-header h2 { overflow-wrap:anywhere; }
 .section-heading { flex-wrap:wrap; }
-.section-heading > div { flex:1; }
+.section-heading > div { flex:1 1 8rem; }
+.main-content { overflow-wrap:anywhere; }
+.list-row .grow { overflow-wrap:anywhere; }
+.week-strip { grid-template-columns:repeat(7,minmax(44px,1fr));overflow-x:auto; }
+.week-day > strong { overflow-wrap:anywhere; }
 .section-heading .button { max-width:100%; }
 .recovery-screen { display:flex;flex-direction:column;gap:24px;padding-top:max(30px,env(safe-area-inset-top)); }
 .recovery-screen h1 { font-size:1.5rem; }

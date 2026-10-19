@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import {
   addGrade, addTask, createInitialData, createPersonalProfile, ensureDailyPlan, getAvailability, getDailyPlan,
   getExamPlan, getGoals, getProgress, getRoadmap, getWeeklyReview, isDateKey,
-  localDateKey, migrateLegacy, normalizeData, removeExam, removeGrade, removeTask,
+  localDateKey, migrateLegacy, normalizeData, removeExam, removeGrade, removeTask, moveTask, replaceTask, editTask,
   saveActivity, saveExam, saveProfile, saveSchedule, saveSubject, saveTaskNotes, saveTaskReview,
   saveUniversity, saveWeeklyReview, shiftDate, skipTask, startOfWeek, toggleRoadmapItem, toggleTask,
 } from './coach.js';
@@ -14,7 +14,7 @@ import { getEventPlan, saveEvent } from './events.js';
 const TODAY = '2026-10-08';
 function personal() { return createInitialData({ today: TODAY, demo: false }); }
 
-test('the supplied personal starting point contains known grades and commitments without invented evidence', () => {
+test('the supplied starting point keeps historical grades unknown and known commitments without invented evidence', () => {
   const state = createPersonalProfile({ today: TODAY });
   const subject = id => state.subjects.find(item => item.id === id);
   assert.equal(state.demo, false);
@@ -23,18 +23,12 @@ test('the supplied personal starting point contains known grades and commitments
   assert.equal(state.profile.schoolYear, 'Q1');
   assert.equal(state.profile.graduationYear, '2028');
   assert.deepEqual(state.profile.pathways, ['USA', 'Germany']);
-  assert.equal(subject('mathematics').written, 6);
-  assert.equal(subject('mathematics').oral, 11);
-  assert.equal(subject('mathematics').baselineWritten, 6);
-  assert.equal(subject('mathematics').baselineOral, 11);
-  assert.equal(subject('english').written, null);
-  assert.equal(subject('english').oral, 7);
-  assert.equal(subject('history').oral, 8);
-  assert.equal(subject('computer-science').oral, 10);
-  assert.equal(subject('politics').oral, 9);
-  assert.ok(['physics', 'german'].every(id => subject(id).written === null && subject(id).oral === null));
+  assert.ok(state.subjects.every(item => item.written === null && item.oral === null && item.baselineWritten === null && item.baselineOral === null));
+  assert.deepEqual(state.profile.prioritySubjects, ['german']);
+  assert.ok(subject('german').weakTopics.includes('Textanalyse'));
   assert.deepEqual(state.subjects.filter(item => item.level === 'LK').map(item => item.id), ['mathematics', 'physics']);
-  assert.deepEqual(state.schedule.fixedActivities[0].days, [2, 5]);
+  assert.deepEqual(state.schedule.fixedActivities, []);
+  assert.match(state.activities.find(item => item.id === 'volleyball-club').notes, /Dienstag- und Freitagabend.*Uhrzeiten noch offen/);
   assert.deepEqual(state.universities.map(item => item.name), ['UCLA', 'UC Berkeley']);
   assert.ok(state.activities.every(item => item.startDate === '' && item.endDate === '' && item.hoursPerWeek === null && item.weeksPerYear === null && item.achievements === '' && item.impact === ''));
   assert.equal(state.profile.englishLevel, 'Not sure yet');
@@ -247,7 +241,7 @@ test('revision task steps capture their course topics for stable history after a
   let state = saveExam(personal(), { id: 'context-exam', subjectId: 'physics', title: 'Electric fields', date: shiftDate(TODAY, 8), topics: ['Electric fields', 'Potential'], format: 'written' });
   state = ensureDailyPlan(state, TODAY);
   const task = state.tasks.find(item => item.examId === 'context-exam');
-  assert.ok(task.steps.includes('Practise the course context: Electric fields, Potential.'));
+  assert.ok(task.steps.includes('Bearbeite den bestätigten Prüfungskontext: Electric fields, Potential.'));
   state = toggleTask(state, task.id, `${TODAY}T14:00:00Z`);
   state = saveExam(state, { id: 'context-exam', topics: ['Mechanics'] });
   state = ensureDailyPlan(state, TODAY);
@@ -354,7 +348,7 @@ test('English exam in twelve days outranks long-term research and exposes a conc
   assert.equal(plan.tasks[0].subjectId, 'english');
   assert.equal(plan.tasks[0].revisionStage, 'understand');
   assert.equal(plan.tasks[0].priority, 'high');
-  assert.match(plan.tasks[0].reason, /12 days/);
+  assert.match(plan.tasks[0].reason, /12 Tagen/);
   assert.ok(plan.tasks[0].steps.length > 0);
 });
 
@@ -367,7 +361,7 @@ test('weak subject gap and LK importance alter prioritization without an exam', 
   const plan = getDailyPlan(state, TODAY);
   assert.equal(plan.tasks[0].subjectId, 'mathematics');
   assert.match(plan.tasks[0].title, /Derivatives/);
-  assert.match(plan.tasks[0].reason, /3\.5 points; target 11/);
+  assert.match(plan.tasks[0].reason, /3,5 Punkte; Ziel 11/);
   assert.ok(plan.tasks.some(task => ['university', 'activity'].includes(task.category)));
 });
 
@@ -409,9 +403,9 @@ test('language level changes useful vocabulary difficulty instead of prescribing
     const state = saveProfile(quiet, { englishLevel: level, germanLevel: level });
     return getDailyPlan(state, TODAY).tasks.find(task => task.id.includes('vocabulary')).title;
   };
-  assert.match(count('A2'), /4 useful everyday words/);
-  assert.match(count('B2'), /8 precise words/);
-  assert.match(count('C1'), /12 precise words/);
+  assert.match(count('A2'), /4 alltagstaugliche Wörter/);
+  assert.match(count('B2'), /8 präzise Wörter/);
+  assert.match(count('C1'), /12 präzise Wörter/);
 });
 
 test('today completion changes progress immediately without replacing or refilling other actions', () => {
@@ -440,7 +434,7 @@ test('readiness counts only actual completed revision milestones, never planned 
   state = ensureDailyPlan(state, tomorrow);
   const next = state.tasks.find(task => task.date === tomorrow && task.examId === 'exam');
   assert.equal(next.revisionStage, '');
-  assert.match(next.title, /consolidate/);
+  assert.match(next.title, /festigen/);
   state = toggleTask(state, next.id, new Date(`${tomorrow}T12:00:00`));
   assert.equal(getProgress(state, tomorrow).exams[0].completed, 1);
   const due = shiftDate(TODAY, 2);
@@ -478,7 +472,7 @@ test('partial or split timed rehearsals do not claim a full uninterrupted timed 
   state = ensureDailyPlan(budget(state, 15, date), date);
   const timed = state.tasks.find(task => task.date === date && task.revisionStage === 'timed');
   assert.ok(timed);
-  assert.match(timed.title, /one timed exam section/);
+  assert.match(timed.title, /Prüfungs-Teilaufgabe unter Zeitdruck/);
   state = toggleTask(state, timed.id, new Date(`${date}T12:00:00`));
   let milestone = getExamPlan(state, 'exam', date).find(step => step.stage === 'timed');
   assert.equal(milestone.completed, false);
@@ -536,7 +530,7 @@ test('overdue actions stay in history but are not copied into tomorrow as a back
   assert.ok(plan.tasks.length >= 3 && plan.tasks.length <= 5);
   assert.ok(plan.tasks.every(task => !original.some(old => old.id === task.id)));
   assert.equal(state.tasks.filter(task => task.date === TODAY).length, original.length);
-  assert.match(plan.adjustment, /fresh plan.*backlog/);
+  assert.match(plan.adjustment, /neuen Plan.*kein Aufgabenstau/);
 });
 
 test('historical plans keep their recorded tasks and sessions when current priorities or schedules change', () => {
@@ -558,8 +552,8 @@ test('historical plans keep their recorded tasks and sessions when current prior
   assert.equal(history.availableMinutes, null);
   assert.equal(history.remainingMinutes, null);
   assert.deepEqual(history.freeWindows, []);
-  assert.match(history.adjustment, /Past plans are preserved/);
-  assert.equal(history.goal, 'Your saved study history');
+  assert.match(history.adjustment, /Frühere Pläne bleiben erhalten/);
+  assert.equal(history.goal, 'Dein gespeicherter Lernverlauf');
 });
 
 test('past dates and dates before installation never receive fabricated recommendations', () => {
@@ -571,7 +565,7 @@ test('past dates and dates before installation never receive fabricated recommen
   assert.equal(history.isHistory, true);
   assert.deepEqual(history.tasks, []);
   assert.equal(history.plannedMinutes, 0);
-  assert.match(history.adjustment, /No actions were saved/);
+  assert.match(history.adjustment, /keine Aufgaben gespeichert/);
   assert.equal(getDailyPlan(state, yesterday).isHistory, true);
   assert.throws(() => ensureDailyPlan(state, TODAY, '2026-02-30'), /calendar date/);
   assert.throws(() => getDailyPlan(state, TODAY, 'invalid'), /calendar date/);
@@ -615,7 +609,7 @@ test('large custom tasks are retained with an explicit over-budget notice', () =
   const plan = getDailyPlan(state, TODAY);
   assert.equal(plan.tasks.length, 1);
   assert.equal(plan.plannedMinutes, 60);
-  assert.match(plan.adjustment, /exceed.*availability/);
+  assert.match(plan.adjustment, /überschreiten die verfügbare Zeit/);
   assert.equal(plan.remainingMinutes, 0);
 });
 
@@ -637,7 +631,7 @@ test('weekly review changes the next week, and Sunday includes a short actual re
   state = saveWeeklyReview(state, { weekStart: '2026-10-05', reflection: 'Need shorter German writing practice', focusSubjectId: 'german', effort: 'Too much' });
   const after = getDailyPlan(state, monday);
   assert.ok(after.tasks.findIndex(task => task.subjectId === 'german') < before.tasks.findIndex(task => task.subjectId === 'german') || after.tasks[0].subjectId === 'german');
-  assert.match(after.adjustment, /weekly review/);
+  assert.match(after.adjustment, /Wochenrückblick/);
   assert.equal(state.weeklyReviews[0].weekStart, '2026-10-05');
 });
 
@@ -652,7 +646,7 @@ test('a lighter weekly review reserves time next week without changing the actua
   assert.ok(lighter.plannedMinutes <= Math.floor(lighter.availableMinutes * .8));
   assert.ok(lighter.plannedMinutes < usual.plannedMinutes);
   assert.ok(lighter.remainingMinutes >= 24);
-  assert.match(lighter.adjustment, /lighter week.*20%/);
+  assert.match(lighter.adjustment, /leichtere Woche.*20 %/);
   assert.equal(getDailyPlan(reviewed, '2026-10-19').plannedMinutes, getDailyPlan(state, '2026-10-19').plannedMinutes);
 });
 
@@ -696,7 +690,7 @@ test('weekly effort respects fixed activities and rest days even when the reques
     const rest = getDailyPlan(budget(reviewed, 0, monday), monday);
     assert.equal(rest.availableMinutes, 0);
     assert.deepEqual(rest.tasks, []);
-    assert.match(rest.adjustment, /No study time/);
+    assert.match(rest.adjustment, /keine Lernzeit frei/);
   }
 });
 
@@ -752,7 +746,7 @@ test('lighter regeneration retains completed work and custom commitments instead
   const preserved = getDailyPlan(alreadyCommitted, monday);
   assert.equal(preserved.tasks.length, 1);
   assert.equal(preserved.plannedMinutes, 110);
-  assert.match(preserved.adjustment, /saved work already uses the lighter target; no extra actions/);
+  assert.match(preserved.adjustment, /feste Arbeit nutzt das reduzierte Ziel.*keine zusätzlichen Aufgaben/);
 });
 
 test('same effort and reflection-only edits leave the existing next-week plan unchanged', () => {
@@ -797,7 +791,7 @@ test('saving the Sunday review guides Monday without replacing Sunday remaining 
   const mondayAfter = getDailyPlan(state, monday);
   const sameFocus = getDailyPlan(saveWeeklyReview(state, { weekStart: '2026-10-05', focusSubjectId: 'german', effort: 'same' }), monday);
   assert.ok(mondayAfter.plannedMinutes < sameFocus.plannedMinutes);
-  assert.ok(mondayAfter.tasks.some(task => task.subjectId === 'german' && /weekly review/.test(task.reason)));
+  assert.ok(mondayAfter.tasks.some(task => task.subjectId === 'german' && /Wochenrückblick/.test(task.reason)));
   assert.equal(mondayAfter.availableMinutes, mondayBefore.availableMinutes);
   assert.ok(mondayAfter.plannedMinutes <= Math.floor(mondayAfter.availableMinutes * .8));
 });
@@ -882,7 +876,8 @@ test('written and oral grade history supports real zero and fifteen points and u
   const maths = getProgress(state, TODAY).subjects.find(subject => subject.id === 'mathematics');
   assert.equal(maths.written, 7.5);
   assert.equal(maths.oral, 11);
-  assert.equal(maths.current, 9.25);
+  assert.equal(maths.current, 26 / 3);
+  assert.match(maths.methodLabel, /Ohne Halbjahr.*Orientierung/);
   state = removeGrade(state, 'full');
   assert.equal(state.subjects.find(subject => subject.id === 'mathematics').written, 0);
   state = removeGrade(state, 'zero');
@@ -907,10 +902,10 @@ test('roadmap distinguishes pathways, includes test policy and uses explicit com
   let state = personal();
   const usa = getRoadmap(state, 'USA', TODAY);
   const germany = getRoadmap(state, 'Germany', TODAY);
-  assert.deepEqual(usa.map(phase => phase.label), ['Today', 'Q1', 'Q2', 'University preparation', 'Q3', 'Applications', 'Q4', 'Abitur preparation', 'Admission', 'Abitur', 'University']);
-  assert.ok(usa.findIndex(phase => phase.label === 'Applications') < usa.findIndex(phase => phase.label === 'Abitur'));
+  assert.deepEqual(usa.map(phase => phase.label), ['Heute', 'Q1', 'Q2', 'Studienvorbereitung', 'Q3', 'Bewerbungen', 'Q4', 'Abiturvorbereitung', 'Zulassung', 'Abitur', 'Studium']);
+  assert.ok(usa.findIndex(phase => phase.label === 'Bewerbungen') < usa.findIndex(phase => phase.label === 'Abitur'));
   assert.equal(usa.find(phase => phase.label === 'Q1').status, 'current');
-  assert.match(usa.flatMap(phase => phase.items).find(item => item.category === 'tests').description, /SAT\/ACT are not considered for UC/);
+  assert.match(usa.flatMap(phase => phase.items).find(item => item.category === 'tests').description, /UC berücksichtigt SAT\/ACT nicht/);
   assert.ok(germany.flatMap(phase => phase.items).some(item => item.description.includes('Hochschulstart')));
   const first = usa[0].items[0];
   state = toggleRoadmapItem(state, first.id);
@@ -922,26 +917,26 @@ test('roadmap distinguishes pathways, includes test policy and uses explicit com
 test('roadmap application dates honor a gap year and preserve the different USA and Germany cycles', () => {
   const phase = (state, path, label) => getRoadmap(state, path, TODAY).find(item => item.label === label);
   const defaults = personal();
-  assert.equal(phase(defaults, 'USA', 'Applications').start, '2027-08-01');
-  assert.equal(phase(defaults, 'USA', 'Applications').end, '2028-07-31');
-  assert.equal(phase(defaults, 'Germany', 'Applications').start, '2028-05-01');
-  assert.equal(phase(defaults, 'Germany', 'Applications').end, '2028-09-30');
-  assert.equal(phase(defaults, 'USA', 'University').start, '2028-09-01');
+  assert.equal(phase(defaults, 'USA', 'Bewerbungen').start, '2027-08-01');
+  assert.equal(phase(defaults, 'USA', 'Bewerbungen').end, '2028-07-31');
+  assert.equal(phase(defaults, 'Germany', 'Bewerbungen').start, '2028-05-01');
+  assert.equal(phase(defaults, 'Germany', 'Bewerbungen').end, '2028-09-30');
+  assert.equal(phase(defaults, 'USA', 'Studium').start, '2028-09-01');
   const gap = saveProfile(defaults, { applicationYear: '2029', universityStartYear: '2030' });
-  assert.equal(phase(gap, 'USA', 'Applications').start, '2029-08-01');
-  assert.equal(phase(gap, 'USA', 'Applications').end, '2030-07-31');
-  assert.doesNotMatch(phase(gap, 'USA', 'Applications').items.find(item => item.title === 'Submit and track each application').description, /2028/);
-  assert.equal(phase(gap, 'Germany', 'Applications').start, '2029-05-01');
-  assert.equal(phase(gap, 'Germany', 'Applications').end, '2029-09-30');
-  assert.equal(phase(gap, 'USA', 'University').start, '2030-09-01');
-  assert.equal(phase(gap, 'Germany', 'University').start, '2030-09-01');
+  assert.equal(phase(gap, 'USA', 'Bewerbungen').start, '2029-08-01');
+  assert.equal(phase(gap, 'USA', 'Bewerbungen').end, '2030-07-31');
+  assert.doesNotMatch(phase(gap, 'USA', 'Bewerbungen').items.find(item => item.title === 'Bewerbungen einreichen und verfolgen').description, /2028/);
+  assert.equal(phase(gap, 'Germany', 'Bewerbungen').start, '2029-05-01');
+  assert.equal(phase(gap, 'Germany', 'Bewerbungen').end, '2029-09-30');
+  assert.equal(phase(gap, 'USA', 'Studium').start, '2030-09-01');
+  assert.equal(phase(gap, 'Germany', 'Studium').start, '2030-09-01');
   assert.equal(phase(gap, 'USA', 'Abitur').start, '2028-05-01');
   const entryOnly = saveProfile(defaults, { universityStartYear: '2030' });
-  assert.equal(phase(entryOnly, 'USA', 'Applications').start, '2029-08-01');
-  assert.equal(phase(entryOnly, 'Germany', 'Applications').start, '2030-05-01');
+  assert.equal(phase(entryOnly, 'USA', 'Bewerbungen').start, '2029-08-01');
+  assert.equal(phase(entryOnly, 'Germany', 'Bewerbungen').start, '2030-05-01');
   const applicationOnly = saveProfile(defaults, { applicationYear: '2029' });
-  assert.equal(phase(applicationOnly, 'USA', 'University').start, '2030-09-01');
-  assert.equal(phase(applicationOnly, 'Germany', 'University').start, '2029-09-01');
+  assert.equal(phase(applicationOnly, 'USA', 'Studium').start, '2030-09-01');
+  assert.equal(phase(applicationOnly, 'Germany', 'Studium').start, '2029-09-01');
 });
 
 test('after graduation generic school revision stops, while language and application development continue', () => {
@@ -953,12 +948,12 @@ test('after graduation generic school revision stops, while language and applica
   assert.ok(plan.tasks.every(task => !['mathematics', 'physics'].includes(task.subjectId)));
   assert.ok(plan.tasks.some(task => task.category === 'language'));
   const writing = plan.tasks.find(task => task.id.includes('subject-') && task.category === 'language');
-  assert.match(writing.title, /academic writing/);
-  assert.match(writing.steps[0], /current practice material/);
-  assert.doesNotMatch(writing.reason, /recorded average|next assessment/);
+  assert.match(writing.title, /wissenschaftsnahes Schreiben/);
+  assert.match(writing.steps[0], /aktuellen Übungsmaterial/);
+  assert.doesNotMatch(writing.reason, /Kursschnitt|nächsten Leistung/);
   assert.ok(plan.tasks.some(task => ['university', 'activity'].includes(task.category)));
   const goals = getGoals(state, TODAY);
-  assert.doesNotMatch(goals.longTerm, /Finish your Abitur/);
+  assert.doesNotMatch(goals.longTerm, /Abitur.*abschließen/);
   assert.ok(goals.monthly.every(goal => goal.category !== 'academics'));
   state = saveExam(state, { id: 'further-exam', title: 'Physics assessment', subjectId: 'physics', date: shiftDate(TODAY, 5) });
   const withExam = getDailyPlan(state, TODAY);
@@ -971,7 +966,7 @@ test('long-term goals become monthly and weekly actions with actual completion p
   let state = ensureDailyPlan(personal(), TODAY);
   const first = state.tasks.find(task => task.date === TODAY);
   const before = getGoals(state, TODAY);
-  assert.match(before.longTerm, /2028.*USA \+ Germany/);
+  assert.match(before.longTerm, /2028.*USA \+ Deutschland/);
   assert.equal(before.monthly.length, 5);
   assert.equal(before.weekly.length, 5);
   assert.ok(before.weekly.every(goal => goal.progress === 0));
@@ -1016,7 +1011,7 @@ test('the entire university coaching chain is causal: profile, roadmap, day, com
   assert.ok(fresh.tasks.length <= 5);
   assert.ok(fresh.tasks.every(task => !taskIds.includes(task.id)));
   assert.ok(fresh.tasks.every(task => task.roadmapStepId !== action.roadmapStepId));
-  assert.match(fresh.adjustment, /fresh plan.*backlog/);
+  assert.match(fresh.adjustment, /neuen Plan.*kein Aufgabenstau/);
   state = saveSubject(state, { id: 'english', enabled: true, written: 7, oral: 9, target: 11, weakTopics: ['Analysis'] });
   state = saveExam(state, { id: 'new-klausur', subjectId: 'english', title: 'English Klausur', date: shiftDate(tomorrow, 12), createdDate: tomorrow, topics: ['American Dream', 'Analysis'], format: 'written' });
   state = ensureDailyPlan(state, tomorrow);
@@ -1064,7 +1059,7 @@ test('prior week performance restarts the neglected subject rather than carrying
   const monday = getDailyPlan(state, '2026-10-12');
   assert.equal(monday.tasks[0].subjectId, 'german');
   assert.equal(monday.tasks[0].minutes, 20);
-  assert.match(monday.tasks[0].reason, /smaller restart/);
+  assert.match(monday.tasks[0].reason, /Einstieg mit einer kürzeren Einheit/);
   assert.ok(monday.tasks.length <= 5);
   assert.ok(monday.tasks.every(task => !['german-1', 'german-2'].includes(task.id)));
 });
@@ -1078,7 +1073,7 @@ test('saving a review recalculates an already previewed next week while preservi
   const after = getDailyPlan(state, monday, TODAY);
   assert.ok(after.plannedMinutes < before.plannedMinutes);
   assert.equal(after.tasks[0].subjectId, 'english');
-  assert.ok(after.tasks[0].reason.includes('weekly review'));
+  assert.ok(after.tasks[0].reason.includes('Wochenrückblick'));
   assert.notEqual(after.tasks[0].planSignature, before.tasks[0].planSignature);
   assert.equal(getProgress(state, TODAY).weekly.completed, 0, 'Previewing and recalculating next week is not completed work');
 });
@@ -1143,8 +1138,8 @@ test('a scheduled language-test rehearsal split by fixed activities is labelled 
   const task = getDailyPlan(state, TODAY).tasks.find(item => item.eventStage === 'rehearsal');
   assert.equal(task.minutes, 30);
   assert.equal(task.sessions.length, 2);
-  assert.match(task.title, /part of a timed test section/);
-  assert.ok(task.steps.some(value => value.includes('one uninterrupted 30-minute session')));
+  assert.match(task.title, /zeitgebundenen Testabschnitt/);
+  assert.ok(task.steps.some(value => value.includes('ununterbrochene 30-Minuten-Einheit')));
   state = toggleTask(state, task.id, `${TODAY}T12:00:00Z`);
   const stage = getEventPlan(state, task.eventId, shiftDate(TODAY, 1)).find(item => item.stage === 'rehearsal');
   assert.equal(stage.completed, false);
@@ -1156,18 +1151,18 @@ test('subject practice links to improving results and writing rather than the pr
   state = saveSubject(state, { id: 'mathematics', written: 6, oral: 11, target: 10, weakTopics: ['Integration'] });
   const normal = getDailyPlan(state, TODAY).tasks.find(task => task.subjectId === 'mathematics');
   assert.equal(normal.roadmapItemId, 'USA-q1-grades');
-  assert.match(normal.linkedGoal, /Improve written.*grades/);
-  assert.match(normal.reason, /Written 6 points; oral 11 points/);
-  assert.match(normal.reason, /written result needs improvement toward 10/);
+  assert.match(normal.linkedGoal, /Schriftlich.*Mathematik.*Physik/);
+  assert.match(normal.reason, /Schriftlich 6 Punkte; mündlich 11 Punkte/);
+  assert.match(normal.reason, /schriftliche Leistung.*10 Punkte/);
   assert.equal(normal.roadmapStepId, '', 'Practising a topic is not evidence that a separate feedback action happened');
   state = saveExam(state, { id: 'english-purpose', title: 'English Klausur', subjectId: 'english', date: shiftDate(TODAY, 12), topics: ['Analysis'] });
   const exam = getDailyPlan(state, TODAY).tasks.find(task => task.examId === 'english-purpose');
   assert.equal(exam.roadmapItemId, 'USA-q1-english');
-  assert.match(exam.linkedGoal, /Improve English writing and exam performance/);
+  assert.match(exam.linkedGoal, /Englisch: Schreiben und Klausurleistung verbessern/);
   const german = getDailyPlan(state, TODAY).tasks.find(task => task.subjectId === 'german');
   if (german) assert.equal(german.roadmapItemId, 'USA-q1-german');
   const baseline = getRoadmap(state, 'USA', TODAY).flatMap(phase => phase.items).find(item => item.id === 'USA-now-baseline');
-  assert.match(baseline.steps[0].title, /Record written and oral points/);
+  assert.match(baseline.steps[0].title, /Schriftliche und mündliche Punkte/);
   assert.equal(baseline.confirmed, false);
   assert.equal(getProgress(state, TODAY).roadmap.USA.completed, 0);
 });
@@ -1188,14 +1183,13 @@ test('English exams belong to language goals and mathematics completion cannot a
 });
 
 test('the planner revision upgrades old cached parent links while preserving completed and active work', () => {
-  let state = ensureDailyPlan(personal(), TODAY);
+  let state = ensureDailyPlan(saveSubject(personal(), { id: 'english', priority: 'high' }), TODAY);
   // Saved fingerprint from this exact personal profile before the explicit
   // planner revision was added. Inputs have not changed during the upgrade.
   const oldSignature = 'd2353cef-925dd1ff';
   state.tasks = state.tasks.map(task => ({ ...task, planSignature: oldSignature, roadmapItemId: 'USA-now-baseline', linkedGoal: 'USA · Record grades and weak topics' }));
-  const completedTask = state.tasks[0];
-  const activeTask = state.tasks[1];
   const remaining = state.tasks.find(task => task.subjectId === 'english');
+  const [completedTask, activeTask] = state.tasks.filter(task => task.id !== remaining.id);
   state = saveTaskNotes(state, remaining.id, 'Keep my unfinished paragraph notes.');
   state = toggleTask(state, completedTask.id, `${TODAY}T12:00:00Z`);
   state = startStudy(state, activeTask, `${TODAY}T12:10:00Z`);
@@ -1205,7 +1199,7 @@ test('the planner revision upgrades old cached parent links while preserving com
   const upgraded = state.tasks.find(task => task.id === remaining.id);
   assert.notEqual(upgraded.planSignature, oldSignature);
   assert.equal(upgraded.roadmapItemId, 'USA-q1-english');
-  assert.match(upgraded.linkedGoal, /English writing and exam performance/);
+  assert.match(upgraded.linkedGoal, /Englisch: Schreiben und Klausurleistung verbessern/);
   assert.equal(upgraded.notes, 'Keep my unfinished paragraph notes.');
   assert.equal(state.tasks.find(task => task.id === completedTask.id).completedAt, retainedCompleted.completedAt);
   assert.equal(state.tasks.find(task => task.id === completedTask.id).linkedGoal, retainedCompleted.linkedGoal);
@@ -1280,4 +1274,126 @@ test('completion day and revision intervals respect device timezone and daylight
   `;
   const result = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, TZ: 'America/Los_Angeles' }, encoding: 'utf8' }));
   assert.deepEqual(result, { key: '2026-10-04', previous: 1, next: 0, dst: '2026-11-02' });
+});
+
+test('moving an unfinished generated task preserves its identity, notes and original date without duplicating it', () => {
+  let state = ensureDailyPlan(personal(), TODAY);
+  const task = state.tasks[0];
+  state = saveTaskNotes(state, task.id, 'My exact unfinished argument.');
+  const tomorrow = shiftDate(TODAY, 1);
+  state = moveTask(state, task.id, tomorrow);
+  state = ensureDailyPlan(state, TODAY);
+  state = ensureDailyPlan(state, tomorrow);
+  const moved = state.tasks.find(item => item.id === task.id);
+  assert.equal(moved.date, tomorrow);
+  assert.equal(moved.movedFrom, TODAY);
+  assert.equal(moved.notes, 'My exact unfinished argument.');
+  assert.equal(moved.origin, 'custom');
+  assert.equal(state.tasks.filter(item => item.id === task.id).length, 1);
+  assert.ok(getDailyPlan(state, tomorrow).tasks.some(item => item.id === task.id));
+});
+
+test('replace keeps the replaced writing in saved history and chooses a bounded replacement', () => {
+  let state = ensureDailyPlan(budget(personal(), 45), TODAY);
+  const task = state.tasks[0];
+  state = saveTaskNotes(state, task.id, 'Keep this unfinished solution.');
+  state = replaceTask(state, task.id);
+  assert.equal(state.tasks.find(item => item.id === task.id).skipped, true);
+  assert.equal(state.tasks.find(item => item.id === task.id).notes, 'Keep this unfinished solution.');
+  assert.ok(getDailyPlan(state, TODAY).tasks.every(item => item.id !== task.id));
+  assert.ok(getDailyPlan(state, TODAY).plannedMinutes <= 45);
+  assert.ok(getDailyPlan(state, TODAY).tasks.length <= 5);
+});
+
+test('editing a task does not reset its completion evidence or notes', () => {
+  let state = addTask(personal(), { id: 'edit', date: TODAY, title: 'First title', minutes: 15, notes: 'Saved note' });
+  state = toggleTask(state, 'edit', `${TODAY}T12:00:00Z`);
+  const stamp = state.tasks[0].completedAt;
+  state = editTask(state, 'edit', { title: 'A clearer action', minutes: 20 });
+  assert.equal(state.tasks[0].completedAt, stamp);
+  assert.equal(state.tasks[0].completed, true);
+  assert.equal(state.tasks[0].notes, 'Saved note');
+});
+
+test('expanded assessment and course settings survive normalization and type changes repair legacy summaries', () => {
+  let state = saveSubject(personal(), { id: 'mathematics', priority: 'high', difficulty: 4, target: null, grading: { mode: 'weighted', courseWeight: 2 } });
+  state = addGrade(state, { id: 'grade-expanded', subjectId: 'mathematics', points: 12, type: 'presentation', date: TODAY, semester: 'Q1', weight: 2, note: 'Actual assessment' });
+  state = normalizeData(JSON.parse(JSON.stringify(state)), TODAY);
+  assert.equal(state.grades[0].type, 'presentation');
+  assert.equal(state.grades[0].semester, 'Q1');
+  assert.equal(state.grades[0].weight, 2);
+  assert.equal(state.subjects[0].target, null);
+  assert.equal(state.subjects[0].priority, 'high');
+  assert.equal(state.subjects[0].grading.courseWeight, 2);
+  assert.equal(Object.hasOwn(state.subjects[0], 'presentation'), false);
+  state = addGrade(state, { id: 'oral-first', subjectId: 'mathematics', points: 8, type: 'oral', date: TODAY });
+  state = addGrade(state, { ...state.grades.find(item => item.id === 'oral-first'), type: 'written' });
+  assert.equal(state.subjects[0].oral, null);
+  assert.equal(state.subjects[0].written, 8);
+});
+
+test('lessons and alternating timetable blocks are excluded from generated study sessions', () => {
+  let state = personal();
+  state = saveSchedule(state, { weekly: state.schedule.weekly.map(day => ({ ...day, minutes: 120, windowStart: '16:00', windowEnd: '19:00' })), cycleAnchor: TODAY,
+    lessons: [{ id: 'lesson', title: 'Maths extra lesson', subjectId: 'mathematics', day: 4, start: '16:00', end: '17:30', cycle: 'A', room: 'B12', teacher: 'Teacher' }] });
+  const availability = getAvailability(state, TODAY);
+  assert.equal(availability.availableMinutes, 90);
+  const plan = getDailyPlan(state, TODAY);
+  assert.ok(plan.tasks.flatMap(task => task.sessions).every(session => session.start >= '17:30'));
+  assert.equal(normalizeData(state, TODAY).schedule.lessons[0].room, 'B12');
+});
+
+test('IELTS performance and exam date feed one coordinated daily task without overtaking a school exam tomorrow', () => {
+  let state = personal();
+  state.ielts = { enabled: true, examDate: shiftDate(TODAY, 18), targetOverall: 7, targets: { writing: 7, reading: 7, listening: 7, speaking: 7 }, estimates: { writing: 4.5 }, weeklyMinutes: 120 };
+  state = saveExam(state, { id: 'physics-next', subjectId: 'physics', title: 'Physics LK Klausur', date: shiftDate(TODAY, 1), topics: ['Electric fields'] });
+  state = ensureDailyPlan(state, TODAY);
+  const plan = getDailyPlan(state, TODAY);
+  assert.equal(plan.tasks[0].examId, 'physics-next');
+  assert.ok(plan.tasks.filter(task => task.ieltsSkill).length <= 1);
+  assert.ok(plan.tasks.every(task => task.objective && task.expectedResult));
+  const restored = normalizeData(JSON.parse(JSON.stringify(state)), TODAY);
+  assert.equal(restored.ielts.examDate, shiftDate(TODAY, 18));
+  assert.equal(restored.ielts.estimates.writing, 4.5);
+});
+
+test('exam preparation is visibly provisional when assessment topics are unknown', () => {
+  const state = saveExam(personal(), { id: 'unknown-topics', title: 'Deutsch Klausur', subjectId: 'german', date: shiftDate(TODAY, 10), target: null });
+  const stages = getExamPlan(state, 'unknown-topics', TODAY);
+  assert.ok(stages.every(stage => stage.provisional === true && /Prüfungsthemen fehlen/.test(stage.reason)));
+  assert.equal(state.exams[0].target, null);
+});
+
+test('dedicated IELTS planning replaces legacy IELTS practice without erasing the saved test record', () => {
+  let state = personal();
+  state = saveProfile(state, { testPlans: [{ id: 'old-ielts', name: 'IELTS Academic', status: 'preparing', targetDate: shiftDate(TODAY, 5) }] });
+  state.ielts = { enabled: true, targetOverall: 7, estimates: { writing: 5 }, weeklyMinutes: 90, examDate: shiftDate(TODAY, 5) };
+  const plan = getDailyPlan(state, TODAY);
+  assert.ok(plan.tasks.some(task => task.ieltsSkill));
+  assert.ok(plan.tasks.every(task => task.eventId !== 'test:old-ielts'));
+  assert.equal(state.profile.testPlans[0].id, 'old-ielts');
+});
+
+test('a declared weak IELTS skill receives regular preparation well before the final three weeks', () => {
+  let state = createPersonalProfile({ today: TODAY });
+  state = saveSubject(state, { id: 'mathematics', written: 6, target: 10 });
+  state.ielts = { enabled: true, examDate: shiftDate(TODAY, 42), targetOverall: 7, weeklyMinutes: 120,
+    scores: [{ id: 'mock', date: TODAY, source: 'mock', skills: { listening: 7, reading: 7, writing: 5, speaking: 7 } }] };
+  state = budget(state, 120);
+  const plan = getDailyPlan(state, TODAY);
+  assert.equal(plan.tasks[0].subjectId, 'mathematics');
+  const preparation = plan.tasks.find(task => task.ieltsSkill);
+  assert.ok(preparation);
+  assert.equal(preparation.ieltsSkill, 'writing');
+  assert.ok(preparation.minutes >= 15);
+  assert.ok(plan.plannedMinutes <= 120);
+  assert.equal(plan.tasks.filter(task => task.ieltsSkill).length, 1);
+});
+
+test('removing assumed fresh training hours never changes existing saved training times', () => {
+  const state = personal();
+  state.schedule.fixedActivities = [{ id: 'confirmed-training', title: 'Volleyball', days: [2, 5], date: '', start: '18:30', end: '20:30', category: 'sport' }];
+  const restored = normalizeData(JSON.parse(JSON.stringify(state)), TODAY);
+  assert.deepEqual(restored.schedule.fixedActivities, state.schedule.fixedActivities);
+  assert.deepEqual(createPersonalProfile({ today: TODAY }).schedule.fixedActivities, []);
 });

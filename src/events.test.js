@@ -192,3 +192,50 @@ test('calendar distance stays correct across DST and long source IDs yield bound
   assert.equal(first.key, getEventCandidates(state, TODAY)[0].key);
   assert.equal(first.eventId, `custom:${'x'.repeat(200)}`);
 });
+
+test('school deadlines preserve subject, time, topics and requested preparation through calendar and planner', () => {
+  const state = saveEvent(personal(), custom({ id: 'analysis', type: 'presentation', title: 'Deutsch-Präsentation', subjectId: 'german', time: '11:15', topics: ['Interpretation', 'Interpretation'], preparation: 'Fünf Minuten frei sprechen und zwei Textbelege erklären.' }));
+  const record = state.events[0];
+  assert.equal(record.time, '11:15');
+  assert.equal(record.subjectId, 'german');
+  assert.deepEqual(record.topics, ['Interpretation']);
+  const agenda = getUpcomingEvents(state, TODAY)[0];
+  assert.equal(agenda.subjectId, 'german');
+  assert.equal(agenda.time, '11:15');
+  const candidate = getEventCandidates(state, TODAY)[0];
+  assert.equal(candidate.category, 'academics');
+  assert.equal(candidate.subjectId, 'german');
+  assert.equal(candidate.goalId, 'grades');
+  assert.ok(candidate.steps.includes(record.preparation));
+  assert.ok(getEventPlan(state, 'custom:analysis', TODAY).every(stage => stage.steps.includes(record.preparation)));
+  assert.throws(() => saveEvent(state, { ...record, time: '25:00' }), /valid event time/);
+});
+
+test('homework creates a deadline with staged preparation and no invented subject or topics', () => {
+  const state = saveEvent(personal(), custom({ id: 'homework', type: 'homework', title: 'Aufgabe abgeben', date: '2026-10-15', priority: 'medium' }));
+  assert.equal(state.events[0].intent, 'deadline');
+  assert.deepEqual(state.events[0].topics, []);
+  assert.equal(state.events[0].subjectId, '');
+  const stages = getEventPlan(state, 'custom:homework', TODAY);
+  assert.ok(stages.every(stage => stage.date >= state.createdDate && stage.date <= state.events[0].date));
+  assert.match(stages[0].steps[0], /noch zu bestätigenden/);
+  assert.equal(getEventCandidates(state, TODAY)[0].category, 'academics');
+});
+
+test('the dedicated IELTS date appears once and delegates preparation to the skill engine', () => {
+  const state = personal();
+  state.ielts = { examDate: '2026-11-01' };
+  state.profile.testPlans = [{ id: 'legacy-ielts', name: 'IELTS', status: 'Booked', targetDate: '2026-11-01' }];
+  const agenda = getUpcomingEvents(state, TODAY);
+  assert.equal(agenda.length, 1);
+  assert.equal(agenda[0].id, 'ielts:academic');
+  assert.equal(agenda[0].source, 'ielts');
+  assert.equal(agenda[0].daysUntil, 23);
+  assert.deepEqual(getEventPlan(state, 'ielts:academic', TODAY), []);
+  assert.deepEqual(getEventCandidates(state, TODAY), []);
+  assert.equal(state.profile.testPlans.length, 1);
+  state.ielts.examDate = '';
+  assert.equal(getUpcomingEvents(state, TODAY)[0].id, 'test:legacy-ielts');
+  state.profile.testPlans = [];
+  assert.deepEqual(getUpcomingEvents(state, TODAY), []);
+});

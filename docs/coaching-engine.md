@@ -1,405 +1,298 @@
-# Northstar coaching model
+# Northstar academic coaching model
 
-Northstar turns a student's academic and university preparation context into
-a small daily plan. The implementation is local and deterministic: the same
-state and date produce the same recommendations. Every generated task has
-a reason, an estimated duration, a category, a linked long-term goal and a
-concrete next action. The roadmap and daily planner are the core; practice
-material is an optional aid for completing those actions.
+Northstar keeps its existing local React architecture and upgrades the
+academic decision-making around it. The core is an explainable chain from
+school and university goals to a realistic daily action. Preparation effort,
+recorded performance, self-assessment and actual milestones remain different
+kinds of evidence.
 
-## The main workflow
+## Starting state and saved data
 
-1. Complete or skip the four-step onboarding. Both routes use the supplied
-   personal starting point: Q1, Hessen, Mathematics and Physics LKs, Abitur
-   2028, and USA/Germany university research. Mathematics starts at written
-   6/oral 11; English oral 7, History oral 8, Computer Science oral 10 and
-   Politics/Economics oral 9. Unreported grades and language levels remain
-   unknown. Four activity records have no invented dates, hours, achievements
-   or impact. There are no sample exams or completed tasks. Tuesday/Friday
-   volleyball hours of 18:30–20:30 and study allowances are editable estimates.
-2. Use the generated roadmap to see year, semester, month and week priorities.
-   Open Today for available time, one focus and a manageable set of actions
-   with short reasons. Planned/remaining time and the bigger picture are
-   expandable. Tap a task for its linked long-term goal, study blocks,
-   instructions, saved work, optional practice and self-review checks.
-   Optionally start a focus session to track elapsed study time.
-3. Complete an action. The completion timestamp updates progress immediately
-   and is persisted locally. A linked roadmap action also gains preparation
-   credit. Today keeps a stable workload instead of adding a replacement every
-   time an action is finished; the next day can select the next unfinished step.
-4. Skip an action when it does not fit today. It leaves the active plan but
-   stays under Skipped today with its notes and self-review. The planner
-   recalculates priorities without building an overdue list.
-5. Add an exam in Plan. The app creates revision milestones using its subject,
-   format, topics, date and the time remaining, then brings appropriate
-   revision actions into daily priorities.
-6. Add other dates in Plan → Events. School exams, test plans and university
-   deadlines appear there from their existing records. Custom internships,
-   projects and milestones have their own preparation sequences.
-7. Use Plan for the week and USA/Germany roadmap. Use Progress to review the
-   week and choose a focus that affects the next week. Profile holds editable
-   goals, subjects, activities, universities, a Timetable tab and settings.
+A fresh profile supplies editable context: Gymnasium in Hessen, Q1, Abitur
+2028, Mathematics and Physics LK, USA/Germany pathways, university and
+study-field interests, and known activity areas. It does not restore old
+approximate grades as if they were current. Grades, target overall average,
+test scores, exam dates, lessons and exact recurring activity hours start
+unknown. Tuesday/Friday evening volleyball can be documented without
+inventing a clock-time block. Weekly study budgets are editable preferences.
+No completed study history or achievements are fabricated.
 
-Future days are previews. Completion controls are disabled until the day
-arrives. Dates use local calendar days rather than UTC midnight; calendar
-arithmetic avoids daylight-saving shifts changing revision milestones.
-Past days show the tasks actually saved for that date. Later changes to
-grades, exam dates or the timetable cannot rewrite missed work. A date
-with no saved plan stays empty; the app does not invent a personal history.
-Historical screens show recorded actions and completed estimated minutes,
-not an availability budget reconstructed from the current timetable.
+Existing profiles are not replaced with these defaults. Their actual grades,
+original baselines, custom subjects, timetable, projects, tasks, notes,
+reviews and roadmap history remain intact. Older fields without semester,
+weight, evidence or IELTS information continue to load without pretending
+that the missing information is known.
 
-## How daily priorities are selected
+## Domain boundaries
 
-`src/coach.js` owns the planning model. `ensureDailyPlan(state, date, referenceDate)` returns
-a new state only when the plan needs to change. The UI supplies today's
-local date as the reference, protecting earlier dates from regeneration.
-`getDailyPlan` accepts the same reference and provides the
-screen model, including tasks, availability, the day's goal, explanations,
-and the long-term → year → semester → month → week → today chain.
-`src/roadmap.js` provides dated pathway milestones and actionable steps;
-`src/events.js` combines dated sources and supplies non-exam preparation
-candidates. Neither module reads browser storage.
+Business logic does not read local storage or call a paid AI service:
 
-Candidates include:
+| Module | Responsibility |
+| --- | --- |
+| `src/coach.js` | State normalization, mutations, daily plans, goals and reviews |
+| `src/grades.js` | Subject/course estimates, explicit weighting, semester scope and future-grade scenarios |
+| `src/recommendations.js` | Explainable subject priorities and next-action recommendations |
+| `src/timetable.js` | Lessons, A/B weeks, conflicts and lesson busy intervals |
+| `src/ielts.js` | IELTS setup, evidence provenance, scoring summary and preparation candidates |
+| `src/guided-learning.js` | Learning phases, practice selection, reflections and review scheduling |
+| `src/roadmap.js` | USA/Germany phases, milestone actions and goal links |
+| `src/events.js` | Unified dated sources and type-specific preparation |
+| `src/profile-evidence.js` | Activity evidence status and profile-development recommendations |
+| `src/study.js` | Focus intervals and measured study-time summaries |
+| `src/storage.js` | Persistence, validation, migration and backup/recovery |
 
-- The next useful exam preparation stage, with higher urgency as the exam
-  approaches and extra weight for a larger subject grade gap.
-- Weak-topic practice for enabled subjects. Mathematics and Physics receive
-  LK priority; a subject selected in the previous weekly review receives
-  extra attention through a smaller focused session.
-- English and German writing or vocabulary, with exercise size and material
-  adapted to the recorded language level.
-- Official-format practice for a test marked preparing or booked with a
-  target date. Tests still under consideration produce policy research
-  rather than an assumed preparation obligation.
-- The next unfinished roadmap action in an active or approaching phase,
-  including programme research, requirements, activities, documents and essays.
-- Type-specific preparation for saved application deadlines, internships,
-  projects and other dated milestones. The latest relevant phase is selected
-  without creating a list of every missed earlier preparation step.
-- A periodic activity contribution reminder when an activity has not been
-  updated recently and completed activity work has not already covered that
-  maintenance need.
-- A short Sunday review.
+React components render and edit this state. Stable record IDs preserve task
+notes, preparation links and historical evidence across changes.
 
-Urgency and grade gaps determine the first priorities. When immediate
-pressure permits, later actions keep breadth across school, languages and
-university preparation. A normal day has at most five generated or committed
-actions. Short days can have fewer. Task durations shrink when necessary,
-and the instructions identify partial work rather than treating a five-minute
-session as a full paper. Days with at least 150 available minutes can use
-longer subject sessions without increasing the five-action limit. The planner
-does not fill spare time by endlessly extending a short roadmap step.
+## Transparent grades and scenarios
 
-Custom actions, completed work, drafts, self-review and an active focus task
-are retained when plans change. Unfinished generated drafts shrink to the
-remaining allowance. When they cannot fit, they stay under **Saved for later**
-and return when the day has enough time, with their notes and stable IDs intact.
-A lighter week still allows one five-minute action on a five-minute day. The UI
-rejects a sixth committed action or a new custom action exceeding the time
-left after committed work. If an existing plan becomes oversized after a
-timetable change, the app explains that a saved custom task must be moved
-or removed. It does not silently delete completed work.
+Every assessment stores points from 0 to 15, subject, performance category,
+date, optional semester, optional individual weight and a note. Zero is a
+valid result. The categories are written, oral, participation, presentation
+and other. Changing a record's category recalculates the relevant values;
+editing and deleting individual records are supported.
 
-Generated tasks use stable IDs derived from their date and recommendation.
-A deterministic plan signature covers relevant academic, profile, schedule
-and prior-completion inputs. Today's completions do not trigger additional
-revision stages; future days can use them. Removing or skipping a generated
-task records its dismissal for that date so the next recalculation does not
-recreate it. Skipping preserves the task record and its saved work; completion
-later clears the skip. Skipped tasks count as planned but unfinished work in
-the weekly review.
+Each subject chooses one calculation:
 
-Missed work remains in history. The next date receives a fresh plan based
-on the current exam stages, event phases and roadmap priorities, without
-copying every unfinished task. Previous-week consistency can increase attention to a subject that
-received too little completed practice.
+1. **Simple:** arithmetic mean of the selected actual assessment records.
+2. **Weighted:** `sum(points × weight) / sum(weights)`. Every included record
+   needs a positive explicit weight; there is no fallback weight hidden in
+   the result.
+3. **Category:** average records within each performance category equally,
+   then apply the configured category weights. A missing included category
+   or an unconfigured recorded category makes the overall result unknown.
+   The engine does not silently renormalize the remaining categories.
 
-## Timetable and availability
+`calculateSubject(data, subjectId, semester?)` returns the average, target
+gap, method, completeness, selected records, trend, semester summaries and
+source. If the subject has assigned semester records, the default scope is
+the profile's current Q1–Q4 semester. A current semester with no results stays
+unknown even when earlier semester records exist. An explicit semester
+filters strictly; `'all'` deliberately aggregates all recorded semesters.
+Records with no assigned semester remain labelled **Ohne Halbjahr ·
+Orientierung**. They are preserved, not automatically reassigned.
 
-Each weekday has a study allowance and a start/end study window. Recurring
-fixed activities and dated appointments are placed first. Overlapping busy
-intervals are merged, and only the free intervals inside the study window
-are usable.
+Original undated written/oral starting values remain a separate rough
+orientation when no actual assessments exist and the simple method applies.
+They are not extra assessments and are never mixed into the dated grade
+history. Weighting them as fictional Klausuren would be misleading.
 
-Available time is the smaller of the day's allowance and those free minutes.
-A date override replaces the weekday allowance without bypassing actual
-free time. An override of zero creates a rest day. Suggested task sessions
-are allocated to the free windows and can be split around activities; task
-details show the separate blocks. Profile → Timetable links to editable study
-allowances, windows and recurring commitments.
+`getAcademicOverview(data)` averages known course estimates with editable
+course weights. Course weights default to equal counting. LK status affects
+study priority, not an assumed statistical or legal double weighting.
+Missing course values remain excluded and the interface shows how many
+courses are known. The overall target remains unknown until entered.
+Neither the course estimate nor its target gap is an official Abitur result.
 
-These are suggested allocations, not live calendar reservations. The app
-does not import a school timetable or external calendar automatically.
-Optional focus sessions measure elapsed time separately; they do not change
-the timetable budget or turn suggested blocks into booked events.
+A trend needs at least four usable assessment results. It compares the older
+and newer halves within the selected scope using the chosen calculation;
+missing category/individual weights can leave the comparison unknown. This
+is a recorded-results comparison, not a prediction of future performance.
 
-## Focus sessions and measured time
+`requiredFutureGrades({ records, target, future, grading })` handles explicit
+what-if assumptions. The UI exposes the number and kind of remaining
+assessments, their required individual weights where relevant, and an
+optional fixed oral result. Unknown future results share a common mean
+value; the function solves for that value using the selected grade model.
+It reports the required mean, minimum whole-point result, attainable range,
+assumptions and explanation. Requirements above 15 are impossible for that
+scenario. Missing weights or categories produce an incomplete explanation,
+not an invented precise forecast. Hypothetical results never enter the real
+assessment history or create exams.
 
-`src/study.js` owns an optional `study` record containing one active session
-and saved sessions. A session snapshots its task ID, title, subject, category,
-chosen duration and local time zone. It keeps closed work intervals and a
-running timestamp. Elapsed time is calculated from timestamps, not interval
-ticks, so reloads and browser throttling do not reset the timer.
+## Priority selection and recommendations
 
-Sessions last five to 180 minutes. Pausing closes the current work interval;
-resuming starts another and never adds the break to the total. A running
-session continues while the app is backgrounded, closed or the phone sleeps,
-but its recorded time is capped at the chosen goal. Pause before a break.
-When the UI next observes an expired session, it saves the capped time.
-There is no background notification or proof that the student was working.
+`getSubjectPriorities` combines target gaps, upcoming exams and deadlines,
+LK study importance, recent results, time since completed practice,
+difficulty, personal preferences, manual overrides and usable study time.
+An approaching Mathematics LK exam can temporarily outrank an ongoing
+German weakness. German can remain a personal focus even when its current
+points are unknown; the engine does not invent a low grade to justify it.
 
-Finishing saves whole elapsed seconds without marking the task complete.
-Completing or removing a task first saves its active session; saved time stays
-recorded if the task is later removed. Only one session can run at a time.
-Switching tasks requires saving the current session first. Discarding an
-active session loses only that unsaved time. Removing a saved log updates
-measured totals without changing task completion or exam preparation credit.
+Internal scores order work. The interface shows a short reason and simple
+priority wording rather than a numeric score. Recommendations include why,
+a concrete action, how to perform it, time and expected benefit. The
+highest-value recommendation appears on Heute; other recommendations stay
+in the relevant subject/profile context. Repeated below-target results and
+repeated practice can trigger a specific teacher-feedback suggestion.
+One disappointing grade alone is not evidence that paid tutoring is needed.
 
-`getStudyStats` groups saved work intervals by the session's recorded local
-calendar days, including time crossing midnight and daylight-saving changes.
-Weekly totals include only the seconds that occurred within that week.
-They exclude paused intervals and unfinished sessions. Timed study is elapsed
-time deliberately recorded by the user, not measured attention or mastery.
+Daily candidates include the next useful exam stage, targeted school and
+language practice, IELTS work, due learning reviews, unfinished roadmap
+actions, relevant dated events, occasional evidence updates and a Sunday
+review. The signature for a plan covers relevant academic, timetable,
+profile, performance and preparation inputs so changing them recalculates
+current/future priorities.
 
-## Practice library and self-review
+## Availability, lessons and events
 
-`src/practice-bank.js` contains eight original English passages and six German
-contexts, with beginner variants, plus 48 academic and 24 beginner vocabulary
-entries for each language. `src/exercises.js` selects material deterministically
-from task date, subject and practice type. English selection also considers
-topics such as the American Dream, civil rights, history, technology and
-leadership that were captured in the task, rather than a subsequently edited
-exam. Vocabulary rotates through the relevant bank in manageable sets.
+A weekday has a study allowance and start/end study window. A dated override
+can change the allowance, including zero for a rest day. Free time is found
+inside that window after merging school lessons, fixed commitments and
+relevant timed appointments. Available study time is the smaller of the
+allowance and those free intervals: the app does not treat every free hour
+as a study obligation.
 
-Summary, analysis and comment practice includes specific prompts, drafting
-steps and self-review criteria. Some exercises offer a collapsed example
-response to compare after the student writes their own answer. Vocabulary
-meanings can be hidden for retrieval practice. Criterion IDs are saved in
-the task's optional `selfReview` array alongside its notes and survive reloads,
-recalculation and backups. They record checks the student reports carrying
-out, not criteria assessed by software.
+Lessons store weekday, subject or title, start/end, optional room/teacher
+and an all-weeks/A/B cycle. The user supplies a known A-week anchor; week
+parity does not guess it. With no anchor, alternating classes are labelled
+uncertain and both possible intervals are cautiously reserved. Overlapping
+lessons in the same applicable cycle are detected; adjacent lessons and
+opposite A/B alternatives are permitted. The daily and weekly views share
+the same lesson data used by the planner.
 
-The library is finite original practice material, not an official exam bank,
-an adaptive vocabulary mastery system or an automated assessment. Stage-specific
-revision still directs the student to appropriate class or official materials.
-Teacher feedback is needed to judge the student's own writing or subject work.
+`src/events.js` presents school exams, test plans, university deadlines,
+IELTS and custom events together. Original records remain canonical.
+Events support relevant subjects, topics, importance, optional exact time,
+notes and required preparation. Custom work can represent homework,
+presentations, projects, internships, submissions or appointments.
 
-## Exams and revision
+School exam preparation uses its known date, subject, format, topics and
+remaining time. Revision stages cover understanding, active practice,
+format-specific work, timed practice, mistakes and lighter final review
+where appropriate. Missing topics are explicitly provisional. Short sessions
+are partial practice; a full timed paper is not falsely credited from a
+small fragmented block. Other event types receive their own preparation
+sequence rather than an identical exam template.
 
-`getExamPlan` uses different stages for written languages, mathematics and
-science, other written subjects, oral exams and practical assessments.
-For example, language preparation includes summary and analysis practice;
-science preparation includes worked problems and mixed problem selection;
-oral preparation includes explanations and follow-up questions.
+## Task lifecycle and daily workload
 
-Stages normally progress from understanding through practice, timed work,
-mistake review and light revision. Short tests reduce the sequence. An exam
-added at short notice compresses dates and removes less useful stages,
-without assigning new work before it was added. The final day emphasises
-light revision and rest instead of a rushed full paper.
+`ensureDailyPlan(state, date, referenceDate)` recalculates only when needed;
+`getDailyPlan` supplies the screen model. Generated and committed work
+normally stays within five actions and the available minutes. Short days
+can contain fewer than three actions. Longer days deepen useful work
+without endlessly extending a small administrative step.
 
-Preparation credit comes from completed tasks linked to that exam and stage.
-Non-timed stages accumulate completed estimated minutes. Partial sessions
-do not complete a milestone until its required duration is covered. A full
-timed rehearsal needs one uninterrupted session of the required duration;
-several short or interrupted sections remain useful practice but do not
-claim completion of that rehearsal.
+Completion is timestamped and persists immediately. It contributes to
+recorded effort, linked preparation and reviews, but does not prove mastery.
+Finishing an action does not refill today with an unlimited stream of tasks.
 
-In this completion model, an uninterrupted session means one suggested study
-block on the completed task. Focus logs are reported separately and do not
-verify rehearsal conditions or replace the task's preparation credit.
+Tasks support opening instructions, focus start/pause, completion, editing,
+replacement and deliberate rescheduling. Skipping preserves the record,
+notes and self-review while freeing today's active plan for recalculation.
+Moving an action checks the destination capacity. Started work that no
+longer fits remains saved for later; user writing is not discarded by a
+change of priorities. Replacements and moved tasks do not create an
+unbounded overdue list.
 
-Exam progress is the proportion of revision milestones completed. It is not
-a predicted exam mark, mastery score or teacher assessment. Built-in
-practice passages are original material. Official-format preparation directs
-the student to class materials or the current official test material;
-Northstar does not generate an official IELTS, Cambridge or SAT score.
+Missed actions stay in history. The next date chooses current useful work
+rather than copying every missed task. Prior dates show saved records and
+are protected from regeneration; the app does not invent a historical plan
+for a date with none. Date arithmetic uses calendar-day components to avoid
+daylight-saving changes shifting revision stages.
 
-## One events and deadlines system
+## Guided learning and reflection
 
-`getUpcomingEvents` derives a date-sorted timeline from school exams, dated
-test plans, saved university deadlines and optional custom events. Namespaced
-IDs such as `exam:<id>`, `test:<id>`, `university:<id>` and `custom:<id>` keep
-different sources distinct. Derived events are edited in their original
-screen so there is one source of truth. Past and completed entries can be
-included when reviewing history.
+`getGuidedSession` returns an objective, why, first step, expected result,
+method, timed phases, practice, resources and self-check guidance. Phase
+durations fit the actual task budget. Subject-specific methods include
+retrieval, worked practice, writing rubrics, error analysis, timed work and
+review; non-academic roadmap tasks instead guide the concrete next action.
 
-Custom events store a title, type, date, optional end date, date meaning
-(deadline, start or milestone), USA/Germany/Both pathway, priority, status,
-preparation-block duration, notes and an optional official link. An internship
-start is treated differently from an application deadline. Fixed activities
-still belong to Schedule: an event's preparation minutes are not its duration
-or a calendar reservation.
+Selected original exercises cover exponential functions and RC discharge.
+German literary analysis includes a short original passage, paragraph
+structure, criteria and a non-binding comparison answer. Existing English
+and German writing/vocabulary material remains available. Other topics use
+relevant current course material and links such as Serlo, LEIFIphysik and
+official language-test preparation. No specific textbook page or unknown
+Klausur requirement is invented. Material that is provisional is labelled.
 
-`getEventPlan` exposes dated preparation stages. Applications progress through
-requirements, documents, review and submission checks; internships through
-arrangements, preparation and start-day planning; projects through scope,
-building and deliverable review; booked or preparing tests through baseline,
-practice and test-day checks. Stages respect a custom event's creation date
-when compressing a short-notice plan. School exams use `getExamPlan` instead.
+A learner can save an answer, an error/insight and confidence of uncertain,
+effortful or independent. The latest topic evidence drives a review date;
+due reviews become workload candidates rather than an additional unlimited
+list. Reflections can be edited/deleted. Persistent difficulty can recommend
+asking a teacher about a specific concept. These are self-checks, not
+reliable automatic correction, teacher assessment or an official IELTS band.
 
-Completed estimated minutes linked to the event and stage provide preparation
-credit. A timed test rehearsal requires one completed task with a full,
-uninterrupted suggested study block of the required duration. Shorter or split
-work remains visible as practice but does not complete that rehearsal. As
-with school exams, suggested blocks and task completion are user-reported;
-the optional focus timer does not verify test conditions or provide stage
-credit. Completing a preparation task does not automatically mark the event
-achieved, the test taken or an application submitted. Tests under consideration
-create policy-research candidates and a dated decision reminder, not test
-practice. Non-exam candidates are selected for active pathways; the timeline
-can still show a saved event from an inactive pathway with an explanation.
+## IELTS evidence and workload
 
-## Goals, roadmap and application profile
+The optional IELTS record includes Academic exam date, overall/skill targets,
+estimates, preparation allowance, recurring mistakes and dated results.
+An unknown date stays unknown. Listening, Reading, Writing and Speaking
+have separate recent values, sources, targets and trends.
 
-`getGoals` connects the long-term direction to yearly and semester priorities,
-then monthly and weekly academic, language, university, activity and review
-goals. Each period includes dates and linked roadmap milestone IDs. The daily
-goal chain uses the parent milestone of the day's highest-priority action
-when selecting the relevant monthly and weekly goal.
+Results distinguish official-test entries, mock results and informal
+self-assessment. “Official” describes how the user entered the result; the
+app does not independently authenticate a certificate. A complete four-skill
+result uses the IELTS overall half-band rounding rule, including quarter-band
+rounding upward. There is no unsupported raw-score conversion for every test
+version and no guaranteed band outcome from task counts.
 
-Year and semester progress counts the roadmap's completed action steps.
-Monthly and weekly academic and language goals count completed sessions in
-their categories, with targets adjusted to usable days. University and activity
-goals count work linked to their roadmap milestones or related event goal IDs,
-so an unrelated task in a broad category does not advance those goals. Period
-goals retain milestone links and earned credit after its final action is
-completed or the whole milestone is confirmed, respecting the selected
-pathways. These metrics measure recorded effort and preparation, not verified
-skill growth or a strict prerequisite tree in which every school exercise
-completes a milestone. Yearly labels change with the active school,
-application, admission or university-transition stage.
+Weak skill gaps and the time remaining select practice, error analysis,
+timed sections or later simulations. Candidates share the school's actual
+availability and priority budget. A major school exam can reduce or defer
+IELTS work. Completed practice measures preparation, not proficiency;
+readiness summaries explain their evidence and missing information.
 
-USA and Germany have distinct milestones from Today through Q1–Q4, university
-preparation, Abitur preparation, Abitur, applications, admission and university.
-Phases are ordered by start date and can overlap: with the default 2028 entry
-direction, US applications start in 2027, before summer 2028 Abitur. They
-include grades, languages, testing decisions, sustained activities, internships,
-programme research, essays, recommendation policies, documents and applications
-where relevant.
+## University roadmap and application evidence
 
-Each milestone contains a small sequence of concrete actions, a preparation
-target and a next unfinished step. Generated tasks retain the milestone and
-step IDs. Completed estimated task minutes accumulate toward the step's
-planned duration; partial work advances its action-progress bar. Exact saved
-setup data can also satisfy matching entry actions: recorded written/oral
-grades, targets and weak topics, a language level with a writing weakness,
-or the requested activity responsibilities, achievements and time commitment.
-Those actions are marked `completedFromData`; the app does not invent a
-completed task or study time for them. Completing all preparation actions
-does not assert that the real milestone happened.
-The milestone checkbox is a separate user confirmation for an actual result,
-such as receiving a certificate, submitting an application or obtaining an
-offer. Confirming it removes its remaining actions from recommendations while
-preserving recorded action history.
+`getGoals` connects the roadmap to year, semester, month, week and daily
+priorities. USA and Germany have distinct overlapping phases from Q1–Q4
+through preparation, Abitur, applications, admission and university. Dates
+are planning estimates derived from graduation and optional application /
+entry years. Actual saved deadlines influence urgency and submission steps
+without being represented as automatically verified institutional dates.
 
-Dates are estimates derived from graduation and optional application and
-university entry years. An explicit application year moves that cycle;
-otherwise a chosen entry year suggests the preceding year for US applications
-and the entry year for Germany. Without either, graduation supplies a
-provisional planning cycle. Displayed phase ranges are clamped so incomplete
-or unusual year edits cannot produce an end before the start. Saved university deadlines influence the relevant
-submission milestone and its daily urgency as well as the shared event plan.
-The engine's saved-deadline flag distinguishes a supplied date from an
-estimated preparation target; it does not mean Northstar has verified the
-date against an official source. Current UC guidance is that
-SAT/ACT are not considered for admission, English proficiency is separate,
-and recommendation requirements differ from other US universities. Germany
-requires checking programme-specific admission, NC or aptitude rules and
-whether Hochschulstart applies. Official links support research; the app
-does not automatically verify an institution's future policy or deadline.
+Task minutes and exact relevant profile data can advance preparation
+steps. Actual milestone confirmation remains separate: completing practice
+does not claim a certificate, submitted application or admission offer.
+The roadmap preserves earned links and history when a phase or action is
+completed or the user changes the active pathway.
 
-University records store programme, country, research status, optional
-user-supplied deadline, requirements, notes and an official link. Activity records
-store start and optional end dates, hours per week, weeks per year,
-responsibilities, description, achievements, measurable impact, notes and
-the last update date. That date and recent completed activity tasks help
-space achievement reminders. The app supports an honest evidence record, not
-fabricated achievements or an automatic Common App submission.
+Universities hold country, programme, research status, requirements,
+source/verification notes, documents, links and supplied deadlines. The app
+helps research policies but does not automatically establish future NC
+cutoffs, certificate acceptance, admissions odds or recommendation rules.
 
-## Progress and weekly review
+Activities and projects store real dates/time commitments, role,
+responsibilities, achievements, measurable impact, notes, project/repository
+links and evidence. Status distinguishes plans, self-report and **Von dir
+belegt**; the latter needs an attached evidence note/link and remains the
+user's assertion, not an external verification service. Profile development
+shows documentation gaps without an arbitrary overall admissions score.
+Suggested steps document restaurant contributions, technical work,
+volleyball progression or actual leadership, and can put academic recovery
+before starting another activity.
 
-Progress reports weekly task completion, estimated minutes completed and
-days with either a completed action or positive saved focus time. Consistency
-and streaks count each such local day once; an active unsaved timer does not
-count yet. When saved focus sessions exist, a separate timed-study section
-shows measured seconds, session count and expandable session history for the
-selected week. Weekly reviews show both time measures without combining them.
-Progress
-also shows subject grade development, exam preparation, linked roadmap action
-progress and separately confirmed milestones. Sunday highlights a review,
-and earlier weeks can be reviewed later.
+## Measured time and weekly review
 
-The review includes strengths, attention areas, university preparation steps,
-a saved reflection and a next-week focus subject. Next-week recommendations
-use the saved focus or previous practice consistency. Choosing a lighter
-load reduces the planning budget; choosing more increases planned work
-within the actual allowance and free study windows. It does not create
-additional time or bypass fixed activities. Unfinished tasks are reconsidered
-rather than bulk carried over.
+Focus sessions retain their existing timestamp-based intervals. A running
+session survives reloads and backgrounding up to its chosen limit; pausing
+excludes the break. Saving measured time does not mark a task complete.
+Removing a saved log changes measured totals without undoing task history.
+Time is grouped by the recorded local day, including midnight and daylight
+saving transitions. It is elapsed time deliberately tracked, not observed
+attention.
 
-Grades use Hessen upper-secondary points from 0 to 15; zero is valid.
-Written and oral records are averaged separately. If the last record of a
-type is deleted, the original starting grade is restored instead of losing
-the baseline. The combined current value is a simple planning estimate,
-not the official written/oral weighting or final Abitur calculation.
+Fortschritt keeps estimated completed-task minutes separate from saved
+focus intervals. Consistency counts days with completed work or positive
+saved focus time. Weekly reviews retain strengths, attention areas, academic
+results, university preparation, reflection and the next focus. A lighter
+week reserves a buffer; more ambitious work remains inside real available
+time. Unfinished tasks are reconsidered, not bulk carried over.
 
-## State, persistence and future sync
+## Persistence, offline use and limitations
 
-The version-2 state separates profile, subjects, exams, optional custom events,
-tasks, grades, activities, universities, schedule, weekly reviews, reflections, roadmap
-completion and optional study sessions. The coaching and study functions do
-not read browser storage or call a server. Mutations such as `saveExam`,
-`addGrade`, `toggleTask` and `pauseStudy` return state, and React renders that
-state through the four screen components.
+The `northstar.coach.v2` storage boundary preserves prior version-2 fields
+and migrates the earlier version-1 format. Added grades/weighting, IELTS,
+lessons, learning and evidence are optional for older backups. Import
+validates supported structure, dates, record IDs and values before replacing
+state. Invalid backups do not erase the current plan. Malformed saved data
+is archived untouched for recovery; if recovery storage is unavailable,
+automatic writes pause to protect the original.
 
-`src/storage.js` is the persistence boundary. It uses
-`northstar.coach.v2`, migrates the earlier `northstar.data.v1` format, and
-provides validated portable JSON import/export. Restore requires explicit
-confirmation before replacing the current plan. Invalid versions, duplicate
-IDs, malformed dates, unsupported records and data that normalization would
-silently lose are rejected. Backups are limited to 20 MB.
+JSON export/restore is the current device-transfer mechanism. Changing
+browser origin or clearing site storage requires a backup. A future sync
+backend needs explicit identity, revisions/conflict handling and tested
+migrations; stable IDs alone do not supply account synchronisation.
 
-The optional `events` and `study` records, task goal/roadmap/event links,
-`selfReview` arrays and `skipped` flag, and extended activity fields preserve
-compatibility with earlier version-2 backups. Events validate dates, type, pathway, date meaning,
-duration, status and safe HTTP(S) links; an end date cannot precede the start.
-Task links preserve stage-specific preparation credit across reloads and
-backups. Study validation checks timestamp time zones,
-interval order, duration caps, exact saved seconds and overlapping session
-spans before restore. Task IDs in session snapshots can outlive the original
-task so removing a task does not erase study history.
+The production shell retains self-hosted fonts, theme modes, safe areas,
+visible-viewport-aware sheets and offline assets. Vendor code is split into
+a cacheable chunk; the service worker discovers production entry assets and
+fonts. Personal records stay in local storage, separate from asset caches.
+Chromium tests cannot establish physical-iPhone Safari behaviour.
 
-When saved data cannot be read, the adapter first preserves the raw original
-in a timestamped recovery key. If it cannot save that recovery copy,
-automatic saving is paused to protect the original. Unavailable or full
-storage is surfaced with a normal user-facing message. The recovery notice
-offers a download of the untouched original. A React error boundary offers
-a reload and saved-data download if a screen fails, without deleting data.
-A backup remains the practical transfer mechanism. Data is local to the
-browser and device, with no account, analytics or paid service dependency.
-
-A future backend can be added behind this boundary, but synchronisation is
-not implemented. It will need account authentication, explicit privacy and
-retention choices, record revisions or conflict resolution, and a tested
-migration strategy. Stable IDs and pure state functions make that possible;
-they do not by themselves solve conflicts between devices.
-
-## Interface and current boundaries
-
-The web shell has four bottom tabs, touch-sized controls, safe-area insets,
-light/dark/device themes, scalable typography, reduced-motion support,
-self-hosted fonts and a production service worker for the offline shell.
-Modal height follows the visible viewport when the keyboard opens. Empty
-states offer a single useful next action. Local data is separate from the
-public asset cache.
-
-The core flow is tested through the real Chromium UI as well as unit tests.
-Physical-iPhone Mobile Safari, Home Screen keyboard behaviour and system
-accessibility checks still require device validation. No essay grading,
-live admissions feed, external calendar integration, account sync or cross-app
-Screen Time restriction is provided by this web coach. The retained native
-source is an earlier independent app and has not received the new coaching
-engine.
+Not implemented: an official Hessen Abitur eligibility/final-grade
+calculator, admissions probabilities, automatic essay/exam grading, account
+sync, calendar import/export, native Screen Time blocking or automatic live
+institutional verification. `native/` remains a separate earlier experiment.

@@ -1,0 +1,17 @@
+.profile-evidence-list { display: grid; }
+.profile-evidence-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; padding: .9rem 0; text-align: left; min-height: 3.5rem; }
+.profile-evidence-row:last-child { border-bottom: 0; }
+.profile-evidence-row span { display: grid; gap: .3rem; min-width: 0; }
+.profile-evidence-row strong { font-size: .9rem; font-weight: 550; }
+.profile-evidence-row small { color: var(--muted); font-size: .8rem; }
+.profile-evidence-row svg { flex-shrink: 0; color: var(--muted); }
+.profile-recommendation { display: grid; gap: .6rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.profile-recommendations .section-heading { align-items: flex-start; }
+.evidence-label { font-size: .7rem; line-height: 1.35; color: var(--muted); }
+.evidence-verified { color: var(--accent); }
+.profile-evidence-editor { border-left: 2px solid var(--line); padding-left: 1rem; }
+.profile-page .card h3 { overflow-wrap: anywhere; }
+.profile-page .tabs-scroll { scrollbar-width: none; }
+.profile-page .tabs-scroll::-webkit-scrollbar { display: none; }
+.profile-page .profile-details > summary { cursor: pointer; padding-block: .65rem; min-height: 2.75rem; }
+.profile-page .profile-direction .stats-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr)); }
