@@ -1,5 +1,6 @@
 import { getExercise } from './exercises.js';
 import { getIELTSPractice } from './ielts.js';
+import { getSATPractice } from './sat.js';
 
 const DAY = 86_400_000;
 const clean = (value, max = 8000) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -132,16 +133,42 @@ function ieltsSession(data, task, today) {
   return { ...base, ...skills[skill], skill, ...(light ? { objective: practice.title, expectedResult: practice.expectedResult, firstStep: 'Nutze bekannte, bereits korrigierte Aufgaben. Bewahre heute Zeit für Erholung.', questions: [] } : {}), phases: practice.steps.map(step => ({ title: step.title, minutes: step.minutes, action: step.instruction })) };
 }
 
+function satSession(data, task, today) {
+  const skill = task.satSkill === 'full' && Number(task.minutes) >= 144 ? 'full' : task.satSkill === 'math' || /sat.*math/i.test(task.title || '') ? 'math' : 'readingWriting';
+  const days = validDate(today) && validDate(data.sat?.examDate) ? Math.round((Date.parse(`${data.sat.examDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / DAY) : null;
+  const practice = getSATPractice(skill, { days, minutes: task.minutes, mistakes: data.sat?.mistakes?.[skill] || '' });
+  const light = days !== null && days >= 0 && days <= 1;
+  const readingQuestions = [
+    { id: 'sat-rw-evidence', prompt: 'Original practice text: A school replaced several paved areas with trees. During the first summer, temperatures were lower near the planted areas than near the remaining pavement. Researchers caution that the study covered only one school. Which conclusion is best supported? A: Trees always reduce temperatures in every city. B: The planted areas at this school were cooler during the observed summer. C: Pavement is the only cause of urban heat. D: Every school should use the same planting plan.', solution: 'B. Die Aussage bleibt auf die beobachteten Flächen, die Schule und den Zeitraum begrenzt.', explanation: 'A und C behaupten mehr, als die Beobachtung zeigt. D ist eine Empfehlung, die der Text nicht belegt. Eigene Übungsfrage, keine Original-SAT-Aufgabe.' },
+    { id: 'sat-rw-boundaries', prompt: 'Choose the grammatically correct version. A: The data were incomplete, the team repeated the experiment. B: The data were incomplete; the team repeated the experiment. C: The data were incomplete the team repeated the experiment. D: The data were incomplete; because the team repeated the experiment.', solution: 'B. Zwei vollständige, inhaltlich verbundene Hauptsätze können mit einem Semikolon verbunden werden.', explanation: 'A verbindet selbstständige Hauptsätze nur mit einem Komma (comma splice). C lässt die notwendige Satzgrenze weg. D setzt nach dem Semikolon keinen selbstständigen Hauptsatz. Eigene Übungsfrage.' },
+  ];
+  const mathQuestions = [
+    { id: 'sat-math-linear', prompt: 'Solve 3(2x − 1) = 21. Show the first step and check your result.', solution: 'x = 4. Durch 3 teilen: 2x − 1 = 7; dann 2x = 8. Probe: 3(8 − 1) = 21.', explanation: 'Die Operation muss auf beiden Seiten erfolgen. Alternativ zuerst ausmultiplizieren. Eigene Übungsfrage, keine Original-SAT-Aufgabe.' },
+    { id: 'sat-math-percent', prompt: 'A price rises from €80 to €100 and later falls by 20%. What is the final price? What was the percentage increase from €80 to €100?', solution: 'Endpreis: €80. Der Anstieg von €80 auf €100 beträgt 25%.', explanation: '0,8 · 100 = 80. Für den Anstieg gilt (100 − 80)/80 = 0,25. Prozentangaben beziehen sich auf unterschiedliche Ausgangswerte. Eigene Übungsfrage.' },
+    { id: 'sat-math-function', prompt: 'For f(x) = 2x² − 3, find f(−2).', solution: 'f(−2) = 5.', explanation: 'Zuerst quadrieren: (−2)² = 4; dann 2 · 4 − 3 = 5. Eigene Übungsfrage.' },
+    { id: 'sat-math-system', prompt: 'If x + y = 10 and 2x − y = 5, find x and y.', solution: 'x = 5, y = 5.', explanation: 'Gleichungen addieren: 3x = 15. Danach y = 10 − 5 = 5; in beide Ausgangsgleichungen einsetzen. Eigene Übungsfrage.' },
+  ];
+  const questions = light || skill === 'full' ? [] : (skill === 'math' ? mathQuestions : readingQuestions).slice(0, Number(task.minutes) < 15 ? 1 : skill === 'math' ? 4 : 2);
+  return { topic: `sat-${skill}`, skill, objective: practice.title, expectedResult: practice.expectedResult, firstStep: practice.steps[0].instruction, method: practice.method,
+    materialLabel: 'Eigene Übungsfragen · keine Originalprüfung und keine automatische Scorebewertung', questions,
+    phases: practice.steps.map(step => ({ title: step.title, minutes: step.minutes, action: step.instruction })),
+    criteria: skill === 'full' ? [] : ['Antwort zuerst selbstständig begründet?', 'Erste fehlerhafte Entscheidung im Vergleich zur Lösung gefunden?', 'Eine korrigierte Regel notiert und die Aufgabe erneut gelöst?'],
+    resources: [{ ...practice.resource, hint: skill === 'full' ? 'Bluebook gibt Module und Zeiten vor. Erfasse danach das tatsächlich ausgewertete Ergebnis; die Fehleranalyse folgt separat.' : 'Wähle Aufgaben zu deinem konkreten Fehlermuster und vergleiche die offiziellen Erklärungen.' }, { title: 'College Board · SAT-Anmeldung', url: 'https://satsuite.collegeboard.org/sat/registration', hint: 'Prüfe zuerst, ob dieser Test für deine Hochschulliste relevant ist.' }],
+  };
+}
+
 const subjectName = value => ({ mathematics: 'Mathematik', physics: 'Physik', german: 'Deutsch', english: 'Englisch', history: 'Geschichte', politics: 'Politik / Wirtschaft', 'computer-science': 'Informatik', art: 'Kunst', religion: 'Religion', sport: 'Sport' }[value]);
 
 function sessionContent(data, task, today) {
   const subject = data.subjects?.find(item => item.id === task.subjectId);
   const content = `${task.learningTopic || ''} ${task.title || ''} ${task.reason || ''} ${task.steps?.join(' ') || ''} ${subject?.name || ''}`.toLowerCase();
   if (task.ieltsSkill) return ieltsSession(data, task, today);
+  if (task.satSkill) return satSession(data, task, today);
   if (task.roadmapStepId || task.eventStage || ['university', 'activity', 'review'].includes(task.category)) return {
     topic: `action:${task.roadmapStepId || task.eventId || task.category || 'personal'}`, objective: task.objective || task.title, expectedResult: task.expectedResult || (task.category === 'activity' ? 'Eine konkrete Verantwortung oder Leistung mit ehrlichem Beleg im Profil.' : 'Ein überprüfbares Ergebnis und ein klarer nächster Schritt.'), firstStep: task.steps?.[0] || 'Öffne die zugehörigen Unterlagen und lege ein konkretes Ergebnis fest.', phaseActions: task.steps?.length ? task.steps : ['Prüfe den aktuellen Stand und die verlässliche Quelle.', 'Erledige genau die beschriebene Handlung.', 'Sichere das tatsächliche Ergebnis mit Quelle oder Notiz.', 'Notiere den nächsten Schritt.'], questions: [], resources: [], method: 'Eine konkrete Handlung mit überprüfbarem Ergebnis', provisional: false,
   };
   if (/ielts/.test(content)) return ieltsSession(data, task, today);
+  if (/\bsat\b/.test(content)) return satSession(data, task, today);
   if (['timed', 'mistakes', 'light', 'explain', 'questions', 'interpret'].includes(task.revisionStage)) {
     const stages = {
       timed: ['Eine passende Prüfungsaufgabe unter Zeitbedingungen bearbeiten.', 'Dein eigener Lösungsversuch ohne Hilfen; die Auswertung folgt danach.'],
@@ -183,7 +210,7 @@ function sessionContent(data, task, today) {
 
 export function getGuidedSession(data = {}, task = {}, today = task.date) {
   const content = sessionContent(data, task, today);
-  const subject = subjectName(task.subjectId) || data.subjects?.find(item => item.id === task.subjectId)?.name || (task.ieltsSkill || /ielts/i.test(task.title || '') ? 'IELTS Academic' : ['university', 'activity'].includes(task.category) ? 'Universität & Profil' : 'Dein nächster Schritt');
+  const subject = task.satSkill ? 'SAT' : subjectName(task.subjectId) || data.subjects?.find(item => item.id === task.subjectId)?.name || (task.ieltsSkill || /ielts/i.test(task.title || '') ? 'IELTS Academic' : ['university', 'activity'].includes(task.category) ? 'Universität & Profil' : 'Dein nächster Schritt');
   const weights = [1, 4, 2, 1];
   const phases = content.phases || allocateLearningPhases(task.minutes, ['Abrufen & planen', 'Selbst bearbeiten', 'Prüfen & verstehen', 'Sichern & wiederholen'].map((title, index) => ({ title, weight: weights[index], action: content.phaseActions[index] || content.phaseActions.at(-1) })));
   const attempts = normalizeLearning(data.learning).attempts.filter(item => item.subjectId === (task.subjectId || '') && item.topic === content.topic && (!validDate(today) || item.date <= today));

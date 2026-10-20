@@ -4,23 +4,44 @@ Use a production build for offline and final mobile-layout checks. Test
 records must stay in an isolated browser profile; example marks, mock scores,
 dates and achievements are test scenarios, not application defaults.
 
-## Verified run — 19 October 2026
+## Verified release checks — 19–20 October 2026
 
-- Node.js 24.19.0; npm 11.9.0; frozen dependencies installed with `npm ci`.
-- `npm test`: **254 passed, 0 failed, 0 skipped**.
-- Production build: passed; application and stable vendor assets split without a bundle warning.
-- Production browser suite: **25 passed, 0 failed**, including both pathways,
-  preserved missed-task history, grade scenarios, IELTS cadence, all main screens,
-  320/390/430 px widths, 200% text, shortened keyboard viewports and offline reload.
-- No uncaught browser errors or console errors across those scenarios.
-- The maintained suite is also reachable through the previous
-  `tests/browser_smoke.py --url … --production` command.
-- Interactive browser walkthroughs covered grade entry/weights/impossible targets,
-  school lessons and A/B conflicts, IELTS setup/mock results, evidence CRUD and
-  guided draft/reflection/reload. Test screenshots are in ignored `test-results/`.
+- Node.js 24.19.0 and npm 11.9.0; frozen dependency lock preserved.
+- `npm test`: **289 passed, 0 failed, 0 skipped** in `/tmp/ux-unit-publish.log`.
+- Root and `/chat/` production builds passed. Vite reports a main-chunk size
+  advisory (approximately 558 kB minified / 166 kB gzip); this is not a build
+  failure or a claim of a completed performance optimization.
+- Maintained academic browser suite: **25 passed, 0 failed** against the
+  production snapshot, including both pathways, preserved missed-task history,
+  grades, IELTS, focus time, backup/recovery and offline reload.
+- New Q1 repair browser suite: **8 passed, 0 failed**, covering reviewed imports
+  of exactly nine examinations and 19 lesson blocks, corrected-record re-import,
+  the unconfirmed German 4/15 draft, preservation after correcting its grade,
+  missing forecast assumptions, achievable
+  and impossible targets, completion/skip/review, IELTS/SAT setup, evidence,
+  changed dates, official-link actions and backup restoration. An explicit
+  08:00–17:00 study window verifies lessons remove conflicting session times.
+- No uncaught page errors or application console errors in these journeys.
+- Hosting browser suite: **5 passed**, covering both root and `/chat/` paths,
+  manifest resolution, cache isolation/cleanup, real interface font bytes,
+  offline reload and exclusion of authenticated, private, no-store,
+  query-bearing and outside-scope requests.
+- Responsive audit script covers 320/360/375/390/430/768/1280 px, light/dark and
+  100%/200% text with populated forms: **28 configurations passed**.
+  It includes the IELTS and SAT goals/results, reviewed school imports,
+  grade analysis, task editing/movement, guided learning, focus timer, every
+  secondary screen, and a reduced keyboard viewport with reachable actions.
+- Interactive screenshot inspection found and repaired the overlapping form
+  grid, toast-over-modal obstruction, tiny schedule inputs and focus-clock
+  wrapping under enlarged text. Screenshots remain in ignored `test-results/`.
 
-Physical iPhone Safari and installed Home Screen acceptance remain unverified.
-These results validate the local production build. Publication is verified
+Physical iPhone Safari, the native iOS keyboard/date picker and installed Home
+Screen acceptance remain unverified. Official provider pages could not be
+retrieved through this environment's network policy; current prices, available
+places/dates and document rules are linked but not claimed to be live verified.
+The final eight-case repair journey also passed on the exact `/chat/` release
+build after the corrected-grade regression fix. These results validate local
+production builds. Publication must be verified
 separately through the existing Pages workflow and the public website.
 
 ## Repeatable checks
@@ -36,6 +57,9 @@ With the preview running, use another terminal:
 
 ```sh
 python3 tests/coach_upgrade_browser.py --url http://127.0.0.1:4176
+python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
+python3 tests/responsive_browser.py --url http://127.0.0.1:4176
+python3 tests/hosting_smoke.py
 ```
 
 The current academic-upgrade suite includes onboarding, fresh unknown data,
@@ -50,7 +74,8 @@ required UI setup. The script has no `--production` flag.
 
 Domain tests cover grade arithmetic and forecasts, priority changes,
 availability, revisions, task lifecycle, timetable conflicts, IELTS scoring
-and evidence, learning reviews, profile evidence and storage compatibility.
+and evidence, SAT scores and shared test budgets, reviewed school imports,
+learning reviews, profile evidence and storage compatibility.
 No separate lint/type-check commands are configured in `package.json`.
 
 ## Real-device acceptance

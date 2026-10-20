@@ -34,6 +34,9 @@ Business logic does not read local storage or call a paid AI service:
 | `src/recommendations.js` | Explainable subject priorities and next-action recommendations |
 | `src/timetable.js` | Lessons, A/B weeks, conflicts and lesson busy intervals |
 | `src/ielts.js` | IELTS setup, evidence provenance, scoring summary and preparation candidates |
+| `src/sat.js` | SAT sections, evidence, practice and full-simulation candidates |
+| `src/test-preparation.js` | Shared school-aware test budgets and conditional preparation horizons |
+| `src/school-import.js` | Reviewed, idempotent school-document merges and unconfirmed German-grade draft |
 | `src/guided-learning.js` | Learning phases, practice selection, reflections and review scheduling |
 | `src/roadmap.js` | USA/Germany phases, milestone actions and goal links |
 | `src/events.js` | Unified dated sources and type-specific preparation |
@@ -296,3 +299,31 @@ Not implemented: an official Hessen Abitur eligibility/final-grade
 calculator, admissions probabilities, automatic essay/exam grading, account
 sync, calendar import/export, native Screen Time blocking or automatic live
 institutional verification. `native/` remains a separate earlier experiment.
+
+## Reviewed Q1 import and coordinated test scheduling
+
+The supplied document pack is a review source, not an automatic replacement for
+saved state. Nine exam dates come from the user's authoritative list. Nineteen
+lessons preserve merged periods and original course codes, including sport PF.
+Unknown exam times/rooms/topics and the Tuesday sport room remain unknown.
+Provenance keys make re-import idempotent even after edits; matching existing
+records receives a provenance key without overwriting their personal details.
+Overlapping lessons require correction or exclusion in the review UI.
+
+The undated German 4/15 statement never enters weighted history automatically.
+Confirmation requires category, real date, explicit weight and acknowledgement
+of the selected calculation rule. Existing 4-point German records prevent a
+second insertion through this draft.
+
+IELTS and SAT use the same school-aware preparation context, weekly request caps
+and one joint test action per day. Their tasks compete with school and profile
+work within the existing daily planner; no independent workload is added after
+planning. A school exam within two days limits test work to 15 minutes, within
+seven days to 25 minutes. Completion and mock evidence remain separate. A full
+Bluebook simulation requires a continuous 144-minute window; short or fragmented
+availability excludes it. A manual move to an unsuitable day or shortening a full
+simulation produces a clear validation message.
+
+Both domains preserve planned/booked provenance, unknown targets and partial
+results through additive v2 normalization and strict backup round trips. The
+storage key, browser origin and Pages configuration are unchanged.

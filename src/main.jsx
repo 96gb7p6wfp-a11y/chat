@@ -11,6 +11,7 @@ import Plan from './components/Plan.jsx';
 import Progress from './components/Progress.jsx';
 import Profile from './components/Profile.jsx';
 import Onboarding from './components/Onboarding.jsx';
+import SchoolImport from './components/SchoolImport.jsx';
 import { StudyDialog, StudyDock, StudyLauncher, StudySaved } from './components/StudyTimer.jsx';
 import { discardStudy, finishStudy, getStudyTimer, pauseStudy, resumeStudy, startStudy } from './study.js';
 import { Button, EmptyState, Field, Modal, formatDate, formatMinutes } from './components/UI.jsx';
@@ -19,6 +20,7 @@ import '@fontsource/dm-sans/latin-500.css';
 import '@fontsource/dm-sans/latin-600.css';
 import '@fontsource/dm-sans/latin-700.css';
 import './styles.css';
+import './semantic.css';
 
 const NAV = [{ id:'today', label:'Heute', icon:Sun }, { id:'plan', label:'Lernplan', icon:CalendarDays }, { id:'progress', label:'Fortschritt', icon:TrendingUp }, { id:'profile', label:'Profil', icon:UserRound }];
 const goalLabel = task => task.linkedGoal || ({academics:'Stärkere Noten für das Abitur',language:'Sprachlich auf das Studium vorbereiten',university:'Bewerbungen gezielt vorbereiten',activity:'Ein belegbares Bewerbungsprofil aufbauen',review:'Deinen Weg zum Studium realistisch gestalten'}[task.category] || 'Dein Studienweg');
@@ -131,9 +133,9 @@ function App() {
         onTime={() => setModal({type:'time'})} onAdd={() => setModal({type:'addTask'})}
         onPlan={showPlan} onProgress={() => navigate('progress')} onProfile={openProfile}
         onPurpose={() => setModal({type:'purpose'})} onChooseDay={chooseDay}/>}
-      {tab === 'plan' && <Plan data={data} today={today} initialView={planView} initialPathway={planPathway || data.profile.pathways[0]} onChange={update} notify={notify} onSelectDay={chooseDay} onOpenProfile={openProfile}/>}
-      {tab === 'progress' && <Progress data={data} today={today} onChange={update} notify={notify} onOpenPlan={showPlan} onOpenProfile={openProfile}/>}
-      {tab === 'profile' && <Profile key={profileSection} initialSection={profileSection} data={data} today={today} onChange={update} notify={notify} onRestartSetup={() => setSetupOpen(true)} onExport={exportData} onImport={() => importRef.current?.click()} onOpenSchedule={() => showPlan('schedule')} onOpenProgress={() => navigate('progress')}/>}
+      {tab === 'plan' && <Plan data={data} today={today} initialView={planView} initialPathway={planPathway || data.profile.pathways[0]} onChange={update} notify={notify} onSelectDay={chooseDay} onOpenProfile={openProfile} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
+      {tab === 'progress' && <Progress data={data} today={today} onChange={update} notify={notify} onOpenPlan={showPlan} onOpenProfile={openProfile} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
+      {tab === 'profile' && <Profile key={profileSection} initialSection={profileSection} data={data} today={today} onChange={update} notify={notify} onRestartSetup={() => setSetupOpen(true)} onExport={exportData} onImport={() => importRef.current?.click()} onOpenSchedule={() => showPlan('schedule')} onOpenProgress={() => navigate('progress')} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
     </main>
     <nav className="bottom-nav" aria-label="Hauptnavigation mobil">{NAV.map(({id,label,icon:Icon}) => <button key={id} onClick={() => navigate(id)} aria-current={tab === id ? 'page' : undefined} className={tab === id ? 'active' : ''}><Icon size={22} strokeWidth={tab === id ? 2 : 1.6}/><span>{label}</span></button>)}</nav>
     <input type="file" ref={importRef} accept="application/json,.json" aria-label="Northstar-Sicherung importieren" className="visually-hidden" onChange={importData}/>
@@ -153,6 +155,7 @@ function App() {
       setData(ensureDailyPlan(next,patch.date || selectedDay,today));setModal(null);notify('Aufgabe angepasst. Dein Entwurf bleibt erhalten.');
     }}/>}
     {modal?.type === 'removeTask' && <Modal title="Diese Aufgabe entfernen?" onClose={() => setModal(null)}><div className="stack"><p>Die Aufgabe wird aus diesem Tag und gegebenenfalls aus deinem Fortschritt entfernt. Erfasste Lernzeit bleibt erhalten. Eine aktive Einheit wird zuerst gespeichert.</p><div className="sheet-footer"><Button variant="secondary" onClick={() => setModal(null)}>Aufgabe behalten</Button><Button variant="danger" onClick={() => {update(current => removeTask(current.study?.active?.taskId === modal.id ? finishStudy(current,new Date()) : current,modal.id));setModal(null);notify('Aufgabe entfernt.');}}>Aufgabe entfernen</Button></div></div></Modal>}
+    {modal?.type === 'schoolImport' && <SchoolImport data={data} today={today} onChange={update} notify={notify} initialSection={modal.section} onClose={() => setModal(null)}/>}
     {modal?.type === 'import' && <Modal title="Sicherung wiederherstellen?" onClose={() => setModal(null)}><div className="stack"><p>Die Sicherung ersetzt den aktuellen Plan auf diesem Gerät. Exportiere vorher eine Sicherung, wenn du diesen Stand behalten möchtest.</p><div className="sheet-footer"><Button variant="secondary" onClick={() => setModal(null)}>Abbrechen</Button><Button onClick={restoreBackup}>Wiederherstellen</Button></div></div></Modal>}
   </div>;
 }

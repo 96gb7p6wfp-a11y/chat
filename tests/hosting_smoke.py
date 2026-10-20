@@ -10,6 +10,7 @@ import os
 import tempfile
 import functools
 import threading
+from urllib.parse import quote
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
@@ -26,11 +27,19 @@ try:
     class QuietHandler(SimpleHTTPRequestHandler):
         def log_message(self, format, *args):
             pass
+        def end_headers(self):
+            if self.path.endswith('/private-response.js'):
+                self.send_header('Cache-Control', 'private')
+            elif self.path.endswith('/no-store-response.js'):
+                self.send_header('Cache-Control', 'no-store')
+            super().end_headers()
     server = ThreadingHTTPServer(('127.0.0.1',0), functools.partial(QuietHandler, directory=str(site)))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     base = f'http://127.0.0.1:{server.server_port}'
     (site / 'chat/assets/auth-only.js').write_text('/* test fixture */')
+    (site / 'chat/assets/private-response.js').write_text('/* private response fixture */')
+    (site / 'chat/assets/no-store-response.js').write_text('/* nonpersistent response fixture */')
     (site / 'assets/outside-only.js').write_text('/* test fixture */')
     results = []
     with sync_playwright() as p:
@@ -45,23 +54,31 @@ try:
             await caches.open(key);
           }
         }''')
+        active_caches = {}
         for prefix in ['/', '/chat/']:
             page.goto(base + prefix)
-            expect(page.get_by_role('heading', name='Your daily plan')).to_be_visible()
+            if page.get_by_role('dialog', name='Dein persönlicher Lernplan').count():
+                page.get_by_role('button', name='Später einrichten', exact=True).click()
+            expect(page.get_by_role('heading', name='Heute', exact=True)).to_be_visible()
             page.wait_for_function('(prefix) => navigator.serviceWorker.controller?.scriptURL === location.origin + prefix + "sw.js"', arg=prefix, timeout=15000)
-            cache_name = 'northstar-shell-' + ('%2F' if prefix == '/' else '%2Fchat%2F') + '-v3'
             caches = page.evaluate('''async () => {
                 const output={};
                 for(const name of await caches.keys()) output[name]=(await(await caches.open(name)).keys()).map(r=>r.url);
                 return output;
             }''')
-            assert cache_name in caches, caches
-            assert cache_name.replace('-v3','-v0') not in caches, caches
+            # Discover the active generation rather than coupling the test to
+            # a release number. The stale fixture must still be removed.
+            cache_prefix = 'northstar-shell-' + quote(prefix, safe='') + '-'
+            current = [name for name in caches if name.startswith(cache_prefix) and name != cache_prefix + 'v0']
+            assert len(current) == 1, caches
+            cache_name = current[0]
+            active_caches[prefix] = cache_name
+            assert cache_prefix + 'v0' not in caches, caches
             assert 'another-app-cache' in caches, caches
             if prefix == '/':
                 assert 'northstar-shell-%2Fchat%2F-v0' in caches, caches
             else:
-                assert 'northstar-shell-%2F-v3' in caches, caches
+                assert active_caches['/'] in caches, caches
             urls = caches[cache_name]
             assert all(url.startswith(base + prefix) and '?' not in url for url in urls), urls
             assert any(url.endswith('.woff2') for url in urls), urls
@@ -76,8 +93,11 @@ try:
             assert all(url.startswith(base + prefix) for url in manifest['icons']), manifest
             context.set_offline(True)
             page.reload(wait_until='domcontentloaded')
-            expect(page.get_by_role('heading',name='Your daily plan')).to_be_visible()
-            for family in ['DM Sans', 'Libre Caslon Display']:
+            expect(page.get_by_role('heading', name='Heute', exact=True)).to_be_visible()
+            # Verify the actual interface font, including its precached bytes,
+            # without requiring a removed decorative font from an old design.
+            families = page.locator('body').evaluate('element => [getComputedStyle(element).fontFamily.split(",")[0].trim().replace(/^[\'"]|[\'"]$/g, "")]')
+            for family in families:
                 loaded=page.evaluate('async family => (await document.fonts.load(`16px "${family}"`)).map(f=>f.status)',family)
                 assert loaded and all(status=='loaded' for status in loaded), (prefix,family,loaded)
             context.set_offline(False)
@@ -86,16 +106,19 @@ try:
           await Promise.all([
             fetch('/chat/api/private'), fetch('/chat/auth/callback'), fetch('/chat/data/private'),
             fetch('/chat/?token=nonsecret-test'), fetch('/chat/assets/auth-only.js',{headers:{Authorization:'Bearer nonsecret-test'}}),
+            fetch('/chat/assets/private-response.js'), fetch('/chat/assets/no-store-response.js'),
             fetch('/assets/outside-only.js')
           ]);
         }''')
-        chat_cached=page.evaluate('async () => (await(await caches.open("northstar-shell-%2Fchat%2F-v3")).keys()).map(r=>r.url)')
-        assert all('?' not in url and not any(part in url for part in ['/api/','/auth/','/data/','auth-only','outside-only']) for url in chat_cached), chat_cached
+        chat_cached=page.evaluate('async name => (await(await caches.open(name)).keys()).map(r=>r.url)', active_caches['/chat/'])
+        assert all('?' not in url and not any(part in url for part in ['/api/','/auth/','/data/','auth-only','outside-only','private-response','no-store-response']) for url in chat_cached), chat_cached
         context.set_offline(True)
-        excluded=page.evaluate('''async () => Promise.all(['/chat/api/private','/chat/auth/callback','/chat/data/private','/chat/?token=nonsecret-test','/assets/outside-only.js'].map(async url=>{try {await fetch(url,{cache:'no-store'});return false;}catch {return true;}}))''')
+        excluded=page.evaluate('''async () => Promise.all(['/chat/api/private','/chat/auth/callback','/chat/data/private','/chat/?token=nonsecret-test','/assets/outside-only.js','/chat/assets/private-response.js','/chat/assets/no-store-response.js'].map(async url=>{try {await fetch(url,{cache:'no-store'});return false;}catch {return true;}}))''')
         assert all(excluded), excluded
+        authenticated_excluded=page.evaluate('''async () => {try {await fetch('/chat/assets/auth-only.js', {headers:{Authorization:'Bearer nonsecret-test'}, cache:'no-store'});return false;}catch {return true;}}''')
+        assert authenticated_excluded
         context.set_offline(False)
-        results.append({'test':'/chat/ excluded query, authenticated, private and outside-scope requests','passed':True})
+        results.append({'test':'/chat/ excludes query, authenticated, private, no-store and outside-scope requests','passed':True})
         assert errors == [], errors
         results.append({'test':'both deployments have no uncaught JavaScript errors','passed':True})
         browser.close()

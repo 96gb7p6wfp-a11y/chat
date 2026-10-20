@@ -1,3 +1,4 @@
+import { semanticCategory } from '../semantic.js';
 import React, { useState } from 'react';
 import { ArrowRight, CalendarDays, Check, Edit3, Plus, Trash2 } from 'lucide-react';
 import { Button, EmptyState, Field, Modal, SectionHeading, formatDate } from './UI.jsx';
@@ -11,7 +12,7 @@ const timeLabel = (event) => event.daysUntil === 0 ? 'Heute' : event.daysUntil =
 export function UpcomingEvents({ data, today, onOpenEvents }) {
   const events = getUpcomingEvents(data, today).slice(0, 3);
   return <section className="card upcoming-events"><SectionHeading title="Nächste Termine" action={<Button variant="ghost" onClick={onOpenEvents}>Alle Termine <ArrowRight size={15} /></Button>} />
-    {events.length ? <div className="stack compact">{events.map((event) => <button className="list-row upcoming-event" key={event.id} onClick={onOpenEvents} aria-label={`Termin öffnen ${event.title}`}><div className="grow"><strong>{event.title}</strong><p className="muted small">{TYPE_LABELS[event.type] || 'Meilenstein'} · {formatDate(event.date, { day: 'numeric', month: 'short' })}</p></div><span className="field-help nowrap">{timeLabel(event)}</span></button>)}</div> : <p className="muted small">Noch kein Termin. Trage deine nächste Prüfung oder Frist ein.</p>}
+    {events.length ? <div className="stack compact">{events.map((event) => <button className="list-row upcoming-event" data-category={semanticCategory(event)} key={event.id} onClick={onOpenEvents} aria-label={`Termin öffnen ${event.title}`}><div className="grow"><strong>{event.title}</strong><p className="muted small">{TYPE_LABELS[event.type] || 'Meilenstein'} · {formatDate(event.date, { day: 'numeric', month: 'short' })}</p></div><span className="field-help nowrap">{timeLabel(event)}</span></button>)}</div> : <p className="muted small">Noch kein Termin. Trage deine nächste Prüfung oder Frist ein.</p>}
   </section>;
 }
 
@@ -53,7 +54,7 @@ export default function Events({ data, today, onChange, notify, onEditExam, onAd
   function edit(event) {
     if (event.source === 'custom') setEditing(data.events?.find((item) => item.id === event.sourceId) || null);
     else if (event.source === 'exam') onEditExam?.(event.sourceId);
-    else onOpenProfile?.(event.source === 'ielts' ? 'IELTS' : event.source === 'university' ? 'Universities' : 'Goals');
+    else onOpenProfile?.(event.source === 'sat' ? 'SAT' : event.source === 'ielts' ? 'IELTS' : event.source === 'university' ? 'Universities' : 'Goals');
   }
   function save(event) {
     // Validate synchronously so any rejected details remain in the form.
@@ -66,7 +67,7 @@ export default function Events({ data, today, onChange, notify, onEditExam, onAd
     {!events.length && <EmptyState icon={CalendarDays} title={showHistory ? 'Noch keine gespeicherten Termine' : 'Keine anstehenden Termine'} description="Trage eine Abgabe, ein Praktikum oder eine Bewerbungsfrist ein." action={<Button onClick={() => setEditing({})}><Plus size={17} /> Termin hinzufügen</Button>} />}
     {events.map((event) => {
       const stages = getEventPlan(data, event.id, today);
-      return <section className="card event-card" key={event.id} data-event-id={event.id} data-event-source={event.source}><div className="row align-start"><div className="grow"><span className="chip event-type">{TYPE_LABELS[event.type] || 'Meilenstein'}{event.pathway !== 'Both' ? ` · ${event.pathway}` : ''}</span><h2>{event.title}</h2><p className="muted">{dateLabel(event)}{event.time ? ` · ${event.time}` : ''} · {event.intent === 'start' ? 'Beginn' : event.intent === 'deadline' ? 'Frist' : 'Meilenstein'} · {timeLabel(event)}</p>{event.status === 'completed' && <span className="chip">Erledigt</span>}</div><button className="icon-button" aria-label={`${event.title} bearbeiten`} onClick={() => edit(event)}><Edit3 size={17} /></button>{event.source === 'custom' && <button className="icon-button" aria-label={`${event.title} löschen`} onClick={() => setDeleting(event)}><Trash2 size={17} /></button>}</div>
+      return <section className="card event-card" data-category={semanticCategory(event)} key={event.id} data-event-id={event.id} data-event-source={event.source}><div className="row align-start"><div className="grow"><span className="chip event-type">{TYPE_LABELS[event.type] || 'Meilenstein'}{event.pathway !== 'Both' ? ` · ${event.pathway}` : ''}</span><h2>{event.title}</h2><p className="muted">{dateLabel(event)}{event.time ? ` · ${event.time}` : ''} · {event.intent === 'start' ? 'Beginn' : event.intent === 'deadline' ? 'Frist' : 'Meilenstein'} · {timeLabel(event)}</p>{event.status === 'completed' && <span className="chip">Erledigt</span>}</div><button className="icon-button" aria-label={`${event.title} bearbeiten`} onClick={() => edit(event)}><Edit3 size={17} /></button>{event.source === 'custom' && <button className="icon-button" aria-label={`${event.title} löschen`} onClick={() => setDeleting(event)}><Trash2 size={17} /></button>}</div>
         {event.preparation && <p className="muted small">{event.preparation}</p>}
         {event.notes && <p className="muted small">{event.notes}</p>}
         {event.pathway !== 'Both' && !data.profile.pathways.includes(event.pathway) && <p className="field-help">Dieser Studienweg ist derzeit inaktiv. Wähle {event.pathway} unter Profil → Ziele, damit die Vorbereitung im Tagesplan erscheint.</p>}

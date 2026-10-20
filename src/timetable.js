@@ -15,7 +15,14 @@ export function normalizeLessons(value) {
   return (Array.isArray(value) ? value : []).slice(0, 500).flatMap(lesson => {
     if (!lesson || typeof lesson !== 'object' || !text(lesson.id, 150) || seen.has(text(lesson.id, 150)) || !Number.isInteger(lesson.day) || lesson.day < 0 || lesson.day > 6 || !validTime(lesson.start) || !validTime(lesson.end) || minute(lesson.end) <= minute(lesson.start) || (!text(lesson.subjectId, 150) && !text(lesson.title))) return [];
     seen.add(text(lesson.id, 150));
-    return [{ id: text(lesson.id, 150), subjectId: text(lesson.subjectId, 150), title: text(lesson.title), day: lesson.day, start: lesson.start, end: lesson.end, room: text(lesson.room, 100), teacher: text(lesson.teacher, 150), cycle: ['A', 'B'].includes(lesson.cycle) ? lesson.cycle : 'all' }];
+    return [{ id: text(lesson.id, 150), subjectId: text(lesson.subjectId, 150), title: text(lesson.title), day: lesson.day, start: lesson.start, end: lesson.end, room: text(lesson.room, 100), teacher: text(lesson.teacher, 150), cycle: ['A', 'B'].includes(lesson.cycle) ? lesson.cycle : 'all',
+      ...(text(lesson.importKey, 150) ? { importKey: text(lesson.importKey, 150) } : {}),
+      ...(text(lesson.courseCode, 100) ? { courseCode: text(lesson.courseCode, 100) } : {}),
+      ...(['LK', 'GK', 'PF'].includes(lesson.courseType) ? { courseType: lesson.courseType } : {}),
+      ...(Number.isInteger(lesson.periodStart) && lesson.periodStart >= 1 && lesson.periodStart <= 20 ? { periodStart: lesson.periodStart } : {}),
+      ...(Number.isInteger(lesson.periodEnd) && lesson.periodEnd >= (lesson.periodStart || 1) && lesson.periodEnd <= 20 ? { periodEnd: lesson.periodEnd } : {}),
+      ...(text(lesson.term, 100) ? { term: text(lesson.term, 100) } : {}),
+    }];
   });
 }
 

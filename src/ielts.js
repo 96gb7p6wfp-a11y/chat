@@ -1,3 +1,5 @@
+import { getPreparationContext, getPreparationHorizon, getPreparationMilestones } from './test-preparation.js';
+
 // IELTS evidence and preparation are separate: completing work never creates a band score.
 export const IELTS_SKILLS = ['listening', 'reading', 'writing', 'speaking'];
 export const IELTS_LABELS = { listening: 'Listening', reading: 'Reading', writing: 'Writing', speaking: 'Speaking' };
@@ -43,6 +45,7 @@ export function normalizeIELTS(value) {
   return {
     enabled: input.enabled !== false,
     examDate: validDate(input.examDate) ? input.examDate : '',
+    dateStatus: input.dateStatus === 'booked' ? 'booked' : 'planned',
     targetOverall: band(input.targetOverall),
     targets: skillBands(input.targets),
     estimates: skillBands(input.estimates),
@@ -76,7 +79,10 @@ export function getIELTSSummary(state, today) {
   const targetMet = !!complete && allTargetsKnown && overall >= data.targetOverall && skills.every(skill => complete.skills[skill.skill] >= skill.target);
   const daysUntil = data.examDate && validDate(today) ? dateNumber(data.examDate) - dateNumber(today) : null;
   const configured = data.examDate !== '' || data.targetOverall !== null || skills.some(skill => skill.target !== null || skill.current !== null) || data.scores.length > 0;
-  return { data, scores, skills, weakest, complete, overall, reportedOverall, daysUntil, targetMet, configured,
+  const context = getPreparationContext(state, today, 'ielts', data.weeklyMinutes);
+  const overallGap = overall !== null && data.targetOverall !== null ? Math.max(0, data.targetOverall - overall) : null;
+  const horizon = getPreparationHorizon(state, today, { measuredCount: complete ? measured.length : 0, gap: overallGap, test: 'IELTS' });
+  return { data, scores, skills, weakest, complete, overall, reportedOverall, daysUntil, targetMet, configured, context, horizon, milestones: getPreparationMilestones(state, today, data.examDate, { measured: !!complete }),
     readiness: !complete ? 'Noch keine vollständige Probeprüfung erfasst.' : targetMet ? 'Deine Ziele wurden in diesem Ergebnis erreicht. Eine Prüfung bleibt eine neue Leistung.' : !allTargetsKnown ? 'Zielwerte fehlen noch für einen vollständigen Vergleich.' : 'Das letzte vollständige Ergebnis liegt noch nicht in allen Bereichen am Ziel.' };
 }
 
@@ -116,13 +122,9 @@ export function getIELTSCandidates(state, today) {
   const summary = getIELTSSummary(state, today);
   const { data, daysUntil } = summary;
   if (!data.enabled || !summary.configured || !validDate(today) || (daysUntil !== null && daysUntil < 0) || data.weeklyMinutes === 0) return [];
-  const day = new Date(`${today}T12:00:00Z`).getUTCDay();
-  const weekStart = dateNumber(today) - (day + 6) % 7;
-  const completed = (Array.isArray(state?.tasks) ? state.tasks : []).filter(task => task.completed && IELTS_SKILLS.includes(task.ieltsSkill) && validDate(task.date) && task.date <= today);
-  const used = completed.filter(task => dateNumber(task.date) >= weekStart).reduce((sum, task) => sum + Math.max(0, Number(task.minutes) || 0), 0);
-  const remaining = Math.max(0, data.weeklyMinutes - used);
+  const { completed, remaining, schoolCap } = summary.context;
   if (remaining < 10) return [];
-  const minutes = Math.min(remaining, daysUntil !== null && daysUntil <= 1 ? 15 : daysUntil !== null && daysUntil <= 28 ? 45 : 30);
+  const minutes = Math.min(remaining, schoolCap, daysUntil !== null && daysUntil <= 1 ? 15 : daysUntil !== null && daysUntil <= 28 ? 45 : 30);
   return summary.skills.map((item, index) => {
     const practice = getIELTSPractice(item.skill, { days: daysUntil, minutes, mistakes: item.mistakes });
     const urgent = daysUntil !== null && daysUntil <= 21;
@@ -132,7 +134,7 @@ export function getIELTSCandidates(state, today) {
     const reason = item.gap > 0 ? `${item.label}: ${item.current.toFixed(1)} (${item.source === 'official' ? 'offiziell' : item.source === 'mock' ? 'Probeprüfung' : 'selbst eingeschätzt'}) → Ziel ${item.target.toFixed(1)}.` : item.current === null ? `Für ${item.label} fehlt noch ein Ergebnis. Beginne mit einer kurzen Standortbestimmung.` : `Halte ${item.label} durch gezielte Übung stabil.`;
     return { key: `ielts-${item.skill}`, category: 'Language', skill: item.skill, ieltsSkill: item.skill, title: practice.title, minutes,
       score: 40 + (item.gap || 0) * 8 + (urgent ? 14 : 0) + (item.current === null ? 3 : 0) - practicePenalty - index * .01,
-      reason: `${reason}${daysUntil !== null ? ` Prüfung ${daysUntil === 0 ? 'heute' : `in ${daysUntil} Tagen`}.` : ''}`,
-      ...practice, goalId: 'english', expectedResult: practice.expectedResult };
+      reason: `${reason}${daysUntil !== null ? ` ${data.dateStatus === 'booked' ? 'Gebuchte Prüfung' : 'Geplanter Termin'} ${daysUntil === 0 ? 'heute' : `in ${daysUntil} Tagen`}.` : ''}`,
+      ...practice, goalId: 'english', expectedResult: practice.expectedResult, workloadReason: summary.context.reason };
   }).sort((a, b) => b.score - a.score);
 }

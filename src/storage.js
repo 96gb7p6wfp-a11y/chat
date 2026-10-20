@@ -193,6 +193,7 @@ function validateCurrent(value) {
     text(record.learningTopic, `${path}.learningTopic`, { max: 300 });
     text(record.expectedResult, `${path}.expectedResult`, { max: 700 });
     choice(record.ieltsSkill, `${path}.ieltsSkill`, ['', 'listening', 'reading', 'writing', 'speaking']);
+    choice(record.satSkill, `${path}.satSkill`, ['', 'readingWriting', 'math', 'full']);
     date(record.reviewDate, `${path}.reviewDate`, { optional: true });
     text(record.movedFrom, `${path}.movedFrom`, { max: 200 });
     if (record.sessions !== undefined) {
@@ -246,6 +247,9 @@ function validateCurrent(value) {
     choice(record.importance, `${path}.importance`, ['low', 'normal', 'high']);
     text(record.notes, `${path}.notes`, { max: 4000 });
     text(record.preparation, `${path}.preparation`, { max: 4000 });
+    text(record.importKey, `${path}.importKey`, { max: 150 });
+    text(record.room, `${path}.room`, { max: 100 });
+    choice(record.level, `${path}.level`, ['GK', 'LK']);
   });
   list(value.activities, 'activities', (record, path) => {
     text(record.name, `${path}.name`, { required: true, max: 300 });
@@ -329,6 +333,7 @@ function validateCurrent(value) {
   validateSchedule(value.schedule);
   validateStudy(value.study);
   validateIELTS(value.ielts);
+  validateSAT(value.sat);
   validateLearning(value.learning);
 }
 
@@ -337,6 +342,7 @@ function validateIELTS(value) {
   if (!object(value)) fail('ielts must be an object.');
   boolean(value.enabled, 'ielts.enabled');
   date(value.examDate, 'ielts.examDate', { optional: true });
+  choice(value.dateStatus, 'ielts.dateStatus', ['planned', 'booked']);
   number(value.weeklyMinutes, 'ielts.weeklyMinutes', 0, 840, { integer: true });
   const band = (score, path) => {
     number(score, path, 0, 9);
@@ -356,6 +362,34 @@ function validateIELTS(value) {
     for (const skill of ['listening', 'reading', 'writing', 'speaking']) band(score.skills[skill], `${path}.skills.${skill}`);
     band(score.overall, `${path}.overall`);
     text(score.notes, `${path}.notes`, { max: 4000 });
+  });
+}
+
+function validateSAT(value) {
+  if (value === undefined) return;
+  if (!object(value)) fail('sat must be an object.');
+  boolean(value.enabled, 'sat.enabled');
+  date(value.examDate, 'sat.examDate', { optional: true });
+  choice(value.dateStatus, 'sat.dateStatus', ['planned', 'booked']);
+  number(value.weeklyMinutes, 'sat.weeklyMinutes', 0, 840, { integer: true });
+  const score = (value, path, total = false) => {
+    number(value, path, total ? 400 : 200, total ? 1600 : 800);
+    if (value != null && value !== '' && value % 10 !== 0) fail(`${path} must use ten-point steps.`);
+  };
+  score(value.targetTotal, 'sat.targetTotal', true);
+  for (const field of ['targets', 'estimates']) {
+    if (!object(value[field])) fail(`sat.${field} must be an object.`);
+    for (const skill of ['readingWriting', 'math']) score(value[field][skill], `sat.${field}.${skill}`);
+  }
+  if (!object(value.mistakes)) fail('sat.mistakes must be an object.');
+  for (const skill of ['readingWriting', 'math']) text(value.mistakes[skill], `sat.mistakes.${skill}`, { max: 2000 });
+  list(value.scores, 'sat.scores', (record, path) => {
+    date(record.date, `${path}.date`);
+    choice(record.source, `${path}.source`, ['official', 'mock', 'self'], { optional: false });
+    if (!object(record.skills)) fail(`${path}.skills must be an object.`);
+    for (const skill of ['readingWriting', 'math']) score(record.skills[skill], `${path}.skills.${skill}`);
+    score(record.overall, `${path}.overall`, true);
+    text(record.notes, `${path}.notes`, { max: 4000 });
   });
 }
 
@@ -481,6 +515,12 @@ function validateSchedule(schedule) {
     text(lesson.room, `${path}.room`, { max: 150 });
     text(lesson.teacher, `${path}.teacher`, { max: 150 });
     choice(lesson.cycle, `${path}.cycle`, ['all', 'A', 'B'], { optional: false });
+    text(lesson.importKey, `${path}.importKey`, { max: 150 });
+    text(lesson.courseCode, `${path}.courseCode`, { max: 100 });
+    text(lesson.term, `${path}.term`, { max: 100 });
+    choice(lesson.courseType, `${path}.courseType`, ['GK', 'LK', 'PF']);
+    number(lesson.periodStart, `${path}.periodStart`, 1, 20, { integer: true });
+    number(lesson.periodEnd, `${path}.periodEnd`, lesson.periodStart || 1, 20, { integer: true });
   }, { optional: true, max: 1000 });
 }
 
@@ -535,7 +575,7 @@ function assertRetained(source, normalized, legacy = false) {
   if (!legacy) {
     // Additive v2 data must survive older installations and backup restoration.
     // Validate before normalization, then reject anything the normalizer lost.
-    for (const key of ['ielts', 'learning']) if (source[key] !== undefined) assertNewDataRetained(source[key], normalized[key], key);
+    for (const key of ['ielts', 'sat', 'learning']) if (source[key] !== undefined) assertNewDataRetained(source[key], normalized[key], key);
     for (const key of ['targetAverage', 'language', 'prioritySubjects']) if (source.profile[key] !== undefined) assertNewDataRetained(source.profile[key], normalized.profile[key], `profile.${key}`);
     if (source.schedule.cycleAnchor !== undefined) assertNewDataRetained(source.schedule.cycleAnchor, normalized.schedule.cycleAnchor, 'schedule.cycleAnchor');
     if (source.schedule.lessons !== undefined) assertNewDataRetained(source.schedule.lessons, normalized.schedule.lessons, 'schedule.lessons');
@@ -544,8 +584,8 @@ function assertRetained(source, normalized, legacy = false) {
       ['grades', ['semester', 'weight', 'type']],
       ['activities', ['evidenceStatus', 'evidence', 'projectUrl']],
       ['universities', ['requirementsStatus', 'requirementsSource', 'requirementsCheckedDate']],
-      ['tasks', ['objective', 'expectedResult', 'learningTopic', 'ieltsSkill', 'reviewDate', 'movedFrom']],
-      ['exams', ['time', 'importance', 'notes', 'preparation']],
+      ['tasks', ['objective', 'expectedResult', 'learningTopic', 'ieltsSkill', 'satSkill', 'reviewDate', 'movedFrom']],
+      ['exams', ['time', 'importance', 'notes', 'preparation', 'importKey', 'room', 'level']],
     ]) for (const record of source[collection] || []) {
       const restored = normalized[collection].find(item => item.id === record.id);
       for (const key of keys) if (record[key] !== undefined) assertNewDataRetained(record[key], restored?.[key], `${collection}.${record.id}.${key}`);

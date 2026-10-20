@@ -114,9 +114,11 @@ export function getUpcomingEvents(state, date, { includePast = false, includeCom
   for (const test of records(state.profile?.testPlans)) {
     if (!validDate(test?.targetDate)) continue;
     if (/ielts/i.test(test.name || '') && validDate(state.ielts?.examDate) && test.targetDate === state.ielts.examDate) continue;
+    if (/\bsat\b/i.test(test.name || '') && validDate(state.sat?.examDate) && test.targetDate === state.sat.examDate) continue;
     events.push({ id: `test:${test.id}`, source: 'test', sourceId: test.id, title: preparingTest(test.status) || finishedTest(test.status) ? test.name : `${test.name}: requirement decision`, type: 'test', date: test.targetDate, endDate: '', intent: preparingTest(test.status) ? 'milestone' : 'deadline', pathway: standardizedTest(test.name) ? 'USA' : 'Both', subjectId: '', minutes: 25, priority: preparingTest(test.status) ? 'high' : 'low', status: finishedTest(test.status) ? 'completed' : 'planned', preparationStatus: string(test.status, 100), notes: string(test.notes, 2000), resource: testResource(test.name), goalId: 'tests', testName: test.name });
   }
-  if (validDate(state.ielts?.examDate)) events.push({ id: 'ielts:academic', source: 'ielts', sourceId: 'academic', title: 'IELTS Academic', type: 'test', date: state.ielts.examDate, endDate: '', intent: 'milestone', pathway: 'Both', subjectId: '', minutes: 25, priority: 'high', status: 'planned', notes: '', resource: testResource('IELTS'), goalId: 'tests', testName: 'IELTS Academic' });
+  if (validDate(state.ielts?.examDate)) events.push({ id: 'ielts:academic', source: 'ielts', sourceId: 'academic', title: 'IELTS Academic', type: 'test', date: state.ielts.examDate, endDate: '', intent: 'milestone', pathway: 'Both', subjectId: '', minutes: 25, priority: 'high', status: 'planned', notes: state.ielts.dateStatus === 'booked' ? 'Gebuchter Termin' : 'Geplanter Termin · noch nicht gebucht', resource: testResource('IELTS'), goalId: 'tests', testName: 'IELTS Academic' });
+  if (validDate(state.sat?.examDate)) events.push({ id: 'sat:digital', source: 'sat', sourceId: 'digital', title: 'SAT', type: 'test', date: state.sat.examDate, endDate: '', intent: 'milestone', pathway: 'USA', subjectId: '', minutes: 25, priority: 'high', status: 'planned', notes: state.sat.dateStatus === 'booked' ? 'Gebuchter Termin' : 'Geplanter Termin · noch nicht gebucht', resource: testResource('SAT'), goalId: 'tests', testName: 'SAT' });
   for (const university of records(state.universities)) {
     if (!validDate(university?.deadline)) continue;
     events.push({ id: `university:${university.id}`, source: 'university', sourceId: university.id, title: `${university.name}: application deadline`, type: 'university', date: university.deadline, endDate: '', intent: 'deadline', pathway: university.country === 'Germany' ? 'Germany' : 'USA', subjectId: '', minutes: 20, priority: 'high', status: university.status === 'applied' ? 'completed' : 'planned', notes: string(university.requirements, 4000), resource: webURL(university.url), goalId: 'applications', universityName: university.name });
@@ -186,7 +188,7 @@ function preparationStages(event) {
 /** An inspectable, dated preparation sequence; completion reflects actual tasks. */
 export function getEventPlan(state, eventId, date) {
   const event = getUpcomingEvents(state, date, { includePast: true, includeCompleted: true }).find(item => item.id === eventId);
-  if (!event || event.source === 'exam' || event.source === 'ielts' || (event.source === 'test' && !preparingTest(event.preparationStatus))) return [];
+  if (!event || event.source === 'exam' || event.source === 'ielts' || event.source === 'sat' || (event.source === 'test' && !preparingTest(event.preparationStatus))) return [];
   const stages = preparationStages(event).map(stage => ({ ...stage, steps: [...stage.steps, ...(event.preparation && !stage.steps.includes(event.preparation) ? [event.preparation] : [])] }));
   return stages.map(stage => {
     const tasks = records(state.tasks).filter(task => task.eventId === event.id && task.eventStage === stage.stage && task.completed && completionDate(task) && completionDate(task) <= date);

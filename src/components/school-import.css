@@ -1,0 +1,27 @@
+.school-import { min-width: 0; }
+.school-import-choices { display: grid; gap: 10px; }
+.school-import-choice { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 80px; padding: 15px 0; background: transparent; color: var(--ink); text-align: left; border: 0; border-bottom: 1px solid var(--line); }
+.school-import-choice > svg { flex: 0 0 auto; color: var(--muted); }
+.school-import-choice > span { flex: 1; min-width: 0; }
+.school-import-choice strong, .school-import-choice small { display: block; overflow-wrap: anywhere; }
+.school-import-choice small { margin-top: 4px; color: var(--muted); line-height: 1.5; }
+.school-import-existing, .school-import-success { display: flex; gap: 9px; align-items: flex-start; font-size: .9rem; color: var(--muted); }
+.school-import-existing svg, .school-import-success svg { flex-shrink: 0; margin-top: 3px; }
+.school-import-day { display: grid; gap: 10px; min-width: 0; }
+.school-import-day h3 { font-size: 1rem; margin: 8px 0 0; }
+.school-import-record { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; }
+.school-import-warning { border-color: var(--danger, #bd7867); }
+.school-import-select { align-items: flex-start; width: 100%; }
+.school-import-select input { flex-shrink: 0; margin-top: 2px; }
+.school-import-select > span { min-width: 0; }
+.school-import-select strong, .school-import-select small { display: block; overflow-wrap: anywhere; }
+.school-import-select small { margin-top: 3px; font-size: .85rem; color: var(--muted); font-weight: 400; }
+.school-import-status { margin: 9px 0 0; }
+.school-import-correction { margin-top: 10px; min-width: 0; }
+.school-import-correction > summary { cursor: pointer; color: var(--muted); font-size: .86rem; line-height: 1.6; overflow-wrap: anywhere; }
+.school-import-correction > .stack { margin-top: 14px; }
+.school-import-exams { display: grid; gap: 10px; }
+.school-import-grade-draft { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.school-import-grade-draft h3 { margin: 7px 0; font-size: 1.35rem; }
+.school-import .sheet-footer { flex-wrap: wrap; }
+.school-import .sheet-footer .button { flex: 1 1 140px; }

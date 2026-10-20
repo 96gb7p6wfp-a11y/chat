@@ -15,3 +15,8 @@
 .profile-page .tabs-scroll::-webkit-scrollbar { display: none; }
 .profile-page .profile-details > summary { cursor: pointer; padding-block: .65rem; min-height: 2.75rem; }
 .profile-page .profile-direction .stats-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr)); }
+
+.profile-import-entry{display:flex;align-items:center;gap:12px;width:100%;min-width:0;padding:16px 0;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.profile-import-entry>span{flex:1;min-width:0;display:grid;gap:4px;overflow-wrap:anywhere}
+.profile-import-entry small{color:var(--muted);font-size:.8rem;line-height:1.5}
+.profile-import-entry>svg{flex:none;color:var(--muted)}

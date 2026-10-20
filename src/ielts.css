@@ -26,3 +26,20 @@
 .ielts-form .checkbox-row { display:flex;align-items:center;gap:10px;min-height:44px;line-height:1.5;font-size:.8125rem; }
 .ielts-form .checkbox-row input { flex-shrink:0;min-width:22px;width:22px;height:22px; }
 @media (max-width:360px) { .ielts-overview { gap:12px; }.ielts-coach .card { padding:17px; } }
+
+/* A sheet may be narrow even on a wide screen. Form columns follow its content width. */
+.ielts-form { min-width:0; container-type:inline-size; }
+.ielts-form .form-grid.preparation-fields { grid-template-columns:minmax(0,1fr); }
+.ielts-form .preparation-fields > *, .ielts-form fieldset { min-inline-size:0; }
+@container (min-width:460px) {
+  .ielts-form .form-grid.preparation-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+.preparation-guide > .stack, .preparation-plan > .stack { margin-top:16px; }
+.preparation-resource { display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:9px 0;color:var(--accent);font-size:.875rem;text-decoration:none; }
+.preparation-resource > span { min-width:0;overflow-wrap:anywhere; }
+.preparation-resource svg { flex-shrink:0; }
+.preparation-checklist { margin:0;padding-left:20px;font-size:.8125rem;line-height:1.6; }
+.preparation-checklist li { padding-left:2px;margin-bottom:10px; }
+.preparation-milestones { display:flex;flex-direction:column;gap:18px;border-left:1px solid var(--line);padding-left:16px;margin:4px 0 8px; }
+.preparation-milestones > div { display:flex;flex-direction:column;gap:5px;min-width:0; }
+.preparation-milestones strong { font-size:.8125rem;overflow-wrap:anywhere; }

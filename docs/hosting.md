@@ -34,9 +34,9 @@ origin, so use backups before moving between hosted installations.
 
 ## Other static HTTPS hosts
 
-The root build from `npm run build` is packaged in
-`artifacts/northstar-web.zip`. Upload its contents as the site's root folder
-on a static HTTPS host. All fonts are bundled locally. No backend server,
+The root build from `npm run build` produces `dist/`. Upload its contents as
+the site's root folder on a static HTTPS host only if intentionally choosing
+another host. All fonts are bundled locally. No backend server,
 hosting token, database, or Apple account is required to run the planning
 prototype.
 
@@ -51,25 +51,18 @@ Deployment credentials, if your chosen host requires them, belong in that
 host's secure settings. Never put them into the app or send their values
 in chat.
 
-## Current publication status
+## Existing website
 
-GitHub API access and source pushing now work. The app was pushed to `main`
-and its first publishing workflow started. That run stopped while reading
-Pages metadata because no Pages site exists yet. Creating the site through
-the available integration returns **HTTP 403: Resource not accessible by
-integration**; repository source permissions do not grant that integration
-Pages activation permission.
+The existing Pages site is
+[https://96gb7p6wfp-a11y.github.io/chat/](https://96gb7p6wfp-a11y.github.io/chat/).
+Pages already uses **GitHub Actions**. Preserve this configuration, the repository,
+visibility and URL. A reviewed push to the existing `main` branch triggers the
+existing workflow; verify that run and the public release assets before claiming
+a new publication succeeded.
 
-The repository owner can finish the one-time configuration at
-[Settings → Pages](https://github.com/96gb7p6wfp-a11y/chat/settings/pages):
-select **Source → GitHub Actions**. After saving, rerun the failed publishing
-workflow or use its **Run workflow** button. No credentials need to be
-shared. Keep the repository's existing public visibility.
+The first failed October 6 run predates Pages activation and is not the status of
+the current site. No setup change is needed to retry a new release.
 
-The environment draft retains `api.github.com` and
-`96gb7p6wfp-a11y.github.io` alongside the package-manager network preset.
-Draft saving does not apply or publish environment configuration. Website
-publication is a separate operation.
-
-A public app URL will be recorded only after a successful deployment and
-functional HTTPS validation. There is no verified live website yet.
+All personal records stay in browser local storage on this same origin. Published
+school-document drafts require local review; deployment never replaces existing
+saved grades, timetable corrections or progress.

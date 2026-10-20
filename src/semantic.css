@@ -1,0 +1,15 @@
+/* Muted category accents use borders and small labels, never full-card fills. */
+:root{--category-school:#527596;--category-exam:#a35f4e;--category-work:#8b6c35;--category-project:#357e76;--category-test:#6c63a0;--category-personal:#537a62}
+:root[data-theme='dark']{--category-school:#94b1cd;--category-exam:#dba18d;--category-work:#ccaf79;--category-project:#8bc4bb;--category-test:#b6acde;--category-personal:#a0bca4}
+@media(prefers-color-scheme:dark){:root:not([data-theme='light']){--category-school:#94b1cd;--category-exam:#dba18d;--category-work:#ccaf79;--category-project:#8bc4bb;--category-test:#b6acde;--category-personal:#a0bca4}}
+[data-category='school']{--category-tone:var(--category-school)}
+[data-category='exam']{--category-tone:var(--category-exam)}
+[data-category='work']{--category-tone:var(--category-work)}
+[data-category='project']{--category-tone:var(--category-project)}
+[data-category='test']{--category-tone:var(--category-test)}
+[data-category='personal']{--category-tone:var(--category-personal)}
+[data-category='university']{--category-tone:var(--muted)}
+.event-card .event-type,.profile-activity .chip:first-child{color:var(--category-tone,var(--muted))}
+.event-card,.profile-activity{border-inline-start:2px solid var(--category-tone,var(--line))}
+.upcoming-event{border-inline-start:2px solid var(--category-tone,var(--line));padding-inline-start:12px}
+.category-exam{color:var(--category-exam)}

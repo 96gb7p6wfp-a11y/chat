@@ -16,8 +16,9 @@ Existing saved profiles keep their actual grades, timetable and history.
 ## The experience
 
 - **Heute:** a personal daily mission, estimated course average and target,
-  biggest improvement opportunity, usually 3–5 concrete actions, and the next
-  relevant dates. Task cards show an objective, duration and expected result;
+  biggest improvement opportunity, three immediately visible actions, and the next
+  relevant date. Additional planned actions remain behind a disclosure. Task
+  cards show an objective, duration and expected result;
   detailed reasons, learning steps and materials open on demand. Short days
   have fewer tasks and zero-minute days can remain free.
 - **Lernplan:** weekly priorities, school lessons, study allowances and fixed
@@ -30,13 +31,29 @@ Existing saved profiles keep their actual grades, timetable and history.
   IELTS evidence, exam preparation and roadmap progress remain available.
 - **Profil:** academic background, goals, subjects, university shortlist,
   activities, projects and work experience, evidence and specific next
-  development actions. IELTS has its own secondary section. Study windows,
+  development actions. IELTS and SAT share a secondary preparation section.
+  Study windows,
   commitments, theme and portable JSON backups are editable here.
 
 Four optional setup steps create a first plan without requiring every field.
 Blank grades and missing examination dates stay blank. The initial study
 allowances and windows are editable planning preferences, not a claim about
 known school hours or actual free time.
+
+## Review your Q1 documents
+
+Open **Profil → Deine Q1-Unterlagen**, or **Lernplan → Prüfungen / Stundenplan →
+Import prüfen**. The supplied 2026/2027 document pack contains only the nine
+personally confirmed examinations and 19 extracted timetable blocks. Review and
+correct the timetable before saving. Double periods, course codes, teacher
+abbreviations and rooms remain editable. The Tuesday sport room stays unknown.
+
+Imports merge by stable provenance and existing subject/date or lesson identity;
+repeating them preserves later corrections. Overlaps are flagged instead of
+silently replacing lessons. The exam review explicitly controls whether imported
+exam subjects are enabled for planning. No exam topics, times or rooms are invented.
+The supplied German 4/15 result is an unconfirmed grade-entry draft until its
+assessment type, date and weight have been supplied. It is not a final course grade.
 
 ## Academic intelligence
 
@@ -117,6 +134,23 @@ admissions probability or an unsupported profile-strength percentage.
 Recommendations favour documenting existing contributions and protecting
 academic priorities over continually adding extracurricular commitments.
 
+## Coordinated IELTS and SAT preparation
+
+Both test coaches support editable goals, planned versus personally booked dates,
+mock/official/self-assessed results, skill-specific errors, guided practice and
+conditional preparation windows. Date-derived milestones are planning proposals,
+not bookable provider dates. All school, test and profile work draws from the same
+daily allowance; at most one standardized-test action is generated each day.
+School examinations reduce test practice to short maintenance sessions. A full
+SAT Bluebook simulation requires an uninterrupted 144-minute block including its
+break; it is never squeezed into a shortened full-test claim.
+
+Official registration and practice resources are linked. Live retrieval of the
+provider pages was blocked by this environment's network policy, so the app does
+not quote unverified current fees, available test dates, places or document rules.
+UCLA and UC Berkeley SAT relevance is distinguished from other university targets;
+check the official policy for the actual application year.
+
 ## Run and verify
 
 Use Node.js 24 from the repository root:
@@ -138,6 +172,8 @@ Then run the current browser suite in another terminal:
 
 ```sh
 python3 tests/coach_upgrade_browser.py --url http://127.0.0.1:4176
+python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
+python3 tests/responsive_browser.py --url http://127.0.0.1:4176
 ```
 
 The browser suite needs Python Playwright and `/usr/bin/chromium`. It covers

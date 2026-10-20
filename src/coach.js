@@ -10,6 +10,7 @@ import { calculateSubject, normalizeAcademicGrade, normalizeGrading } from './gr
 import { getSubjectPriorities } from './recommendations.js';
 import { normalizeLessons, lessonBlocks } from './timetable.js';
 import { normalizeIELTS, getIELTSCandidates, getIELTSSummary } from './ielts.js';
+import { normalizeSAT, getSATCandidates, getSATSummary } from './sat.js';
 import { normalizeLearning, getLearningReviews, getTaskLearningMetadata } from './guided-learning.js';
 export { getSubjectPriorities } from './recommendations.js';
 
@@ -113,7 +114,7 @@ function normalSubject(subject) {
 }
 function normalExam(exam) {
   if (!exam || !text(exam.id, 150) || !text(exam.title, 300) || !isDateKey(exam.date)) return null;
-  return { id: text(exam.id, 150), title: text(exam.title, 300), subjectId: text(exam.subjectId, 150), date: exam.date, topics: words(exam.topics), format: ['written', 'oral', 'test', 'practical'].includes(exam.format) ? exam.format : 'written', target: number(exam.target, Object.hasOwn(exam, 'target') ? null : 10, 0, 15), time: clockMinutes(exam.time) !== null ? exam.time : '', importance: ['low', 'normal', 'high'].includes(exam.importance) ? exam.importance : 'normal', notes: text(exam.notes, 3000), preparation: text(exam.preparation, 3000), ...(isDateKey(exam.createdDate) ? { createdDate: exam.createdDate } : {}) };
+  return { id: text(exam.id, 150), title: text(exam.title, 300), subjectId: text(exam.subjectId, 150), date: exam.date, topics: words(exam.topics), format: ['written', 'oral', 'test', 'practical'].includes(exam.format) ? exam.format : 'written', target: number(exam.target, Object.hasOwn(exam, 'target') ? null : 10, 0, 15), time: clockMinutes(exam.time) !== null ? exam.time : '', importance: ['low', 'normal', 'high'].includes(exam.importance) ? exam.importance : 'normal', notes: text(exam.notes, 3000), preparation: text(exam.preparation, 3000), importKey: text(exam.importKey, 150), room: text(exam.room, 100), ...(exam.level === 'LK' || exam.level === 'GK' ? { level: exam.level } : {}), ...(isDateKey(exam.createdDate) ? { createdDate: exam.createdDate } : {}) };
 }
 function normalTask(task) {
   if (!task || !text(task.id, 200) || !text(task.title, 300) || !isDateKey(task.date)) return null;
@@ -127,7 +128,7 @@ function normalTask(task) {
     origin: task.origin === 'generated' ? 'generated' : 'custom', revisionStage: text(task.revisionStage, 100), revisionPlanId: text(task.revisionPlanId, 200), planSignature: text(task.planSignature, 100),
     sessions: list(task.sessions, 20).filter(session => clockMinutes(session?.start) !== null && clockMinutes(session?.end) !== null && clockMinutes(session.end) > clockMinutes(session.start)).map(session => ({ start: session.start, end: session.end })),
     start: clockMinutes(task.start) !== null ? task.start : '', end: clockMinutes(task.end) !== null ? task.end : '',
-    objective: text(task.objective, 500), expectedResult: text(task.expectedResult, 700), learningTopic: text(task.learningTopic, 300), ieltsSkill: ['listening', 'reading', 'writing', 'speaking'].includes(task.ieltsSkill) ? task.ieltsSkill : '',
+    objective: text(task.objective, 500), expectedResult: text(task.expectedResult, 700), learningTopic: text(task.learningTopic, 300), ieltsSkill: ['listening', 'reading', 'writing', 'speaking'].includes(task.ieltsSkill) ? task.ieltsSkill : '', satSkill: ['readingWriting', 'math', 'full'].includes(task.satSkill) ? task.satSkill : '',
     movedFrom: isDateKey(task.movedFrom) ? task.movedFrom : '', reviewDate: isDateKey(task.reviewDate) ? task.reviewDate : '',
     ...(task.skipped !== undefined ? { skipped: task.skipped === true && !completedAt } : {}),
   };
@@ -175,7 +176,7 @@ export function createInitialData({ today = localDateKey(), demo = true } = {}) 
   let state = {
     version: 2, createdDate: today, onboardingCompleted: false, demo: Boolean(demo),
     profile: normalProfile(), subjects: SUBJECTS.map(([id, name, level]) => ({ id, name, level, written: null, oral: null, baselineWritten: null, baselineOral: null, target: 10, weakTopics: [], enabled: ['mathematics', 'physics', 'english', 'german'].includes(id) })),
-    exams: [], events: [], tasks: [], grades: [], activities: [], universities: [], schedule: normalSchedule(), weeklyReviews: [], roadmapCompleted: [], reflections: [], legacyMilestones: [], dismissedTaskIds: [], study: createStudyState(), ielts: normalizeIELTS(), learning: normalizeLearning(),
+    exams: [], events: [], tasks: [], grades: [], activities: [], universities: [], schedule: normalSchedule(), weeklyReviews: [], roadmapCompleted: [], reflections: [], legacyMilestones: [], dismissedTaskIds: [], study: createStudyState(), ielts: normalizeIELTS(), sat: normalizeSAT(), learning: normalizeLearning(),
   };
   state.universities = [
     { id: 'ucla', name: 'UCLA', country: 'USA', program: 'Explore data, business and technology programmes', deadline: '', requirements: 'Verify current UC requirements for international applicants. UC does not consider SAT/ACT for admission; check each programme and English-proficiency policy.', notes: 'Aspirational option. Keep a balanced list and research cost and financial support.', url: 'https://admission.ucla.edu/apply/international-applicants', status: 'researching' },
@@ -283,7 +284,7 @@ export function normalizeData(value, today = localDateKey()) {
     ...base, version: 2, createdDate: isDateKey(value.createdDate) ? value.createdDate : today,
     onboardingCompleted: value.onboardingCompleted === true, demo: value.demo === true,
     profile: normalProfile(value.profile), subjects: Array.isArray(value.subjects) ? subjects : base.subjects,
-    exams: uniqueRecords(value.exams, normalExam), events: normalizeEvents(value.events), tasks, grades, study: normalizeStudy(value.study), ielts: normalizeIELTS(value.ielts), learning: normalizeLearning(value.learning),
+    exams: uniqueRecords(value.exams, normalExam), events: normalizeEvents(value.events), tasks, grades, study: normalizeStudy(value.study), ielts: normalizeIELTS(value.ielts), sat: normalizeSAT(value.sat), learning: normalizeLearning(value.learning),
     activities: uniqueRecords(value.activities, normalActivity), universities: Array.isArray(value.universities) ? uniqueRecords(value.universities, normalUniversity) : base.universities,
     schedule: normalSchedule(value.schedule), weeklyReviews: [...reviews.values()].sort((a, b) => b.weekStart.localeCompare(a.weekStart)),
     roadmapCompleted: words(value.roadmapCompleted, 300), dismissedTaskIds: words(value.dismissedTaskIds, 3000),
@@ -424,7 +425,7 @@ export function getExamPlan(state, examId, today = localDateKey()) {
       ['understand', 14, `Kernideen zu ${topic} ordnen`, 'Verbinde Fakten, Ursachen und Beispiele in einem kurzen Begriffsnetz.', 25],
       ['recall', 10, `${name}: wichtige Belege abrufen`, 'Rufe Kernideen ohne Notizen ab. Prüfe danach Lücken und die Genauigkeit deiner Belege.', 25],
       ['argument', 7, `Ein belegtes Argument in ${name} entwickeln`, 'Gliedere eine Antwort mit Aussage, präzisen Belegen und Bewertung.', 30],
-      ['timed', 4, `Eine ${name}-Antwort unter Zeitdruck schreiben`, 'Practise your exam format and compare against the marking criteria.', 35],
+      ['timed', 4, `Eine ${name}-Antwort unter Zeitdruck schreiben`, 'Übe dein Prüfungsformat und vergleiche deine Antwort mit den bekannten Bewertungskriterien.', 35],
       ['mistakes', 2, `${name}: schwache Antworten überarbeiten`, 'Korrigiere Auslassungen, unklare Begründungen und schwache Belege in bisherigen Antworten.', 20],
       ['light', 1, `${name}: Kernideen leicht wiederholen`, 'Wiederhole kurze Stichwortkarten und erhole dich vor der Prüfung.', 15],
     ];
@@ -551,7 +552,10 @@ function makeCandidates(state, date) {
   const ieltsSummary = getIELTSSummary(state, date);
   const dedicatedIELTS = ieltsSummary.data.enabled && ieltsSummary.configured;
   const olderIELTSEvents = new Set((state.profile.testPlans || []).filter(test => /ielts/i.test(test.name)).map(test => `test:${test.id}`));
-  candidates.push(...getEventCandidates(priorCompletionState, date).filter(item => !dedicatedIELTS || item.eventStage === 'research' || !olderIELTSEvents.has(item.eventId)));
+  const satSummary = getSATSummary(state, date);
+  const dedicatedSAT = satSummary.data.enabled && satSummary.configured;
+  const olderSATEvents = new Set((state.profile.testPlans || []).filter(test => /\bsat\b/i.test(test.name)).map(test => `test:${test.id}`));
+  candidates.push(...getEventCandidates(priorCompletionState, date).filter(item => item.eventStage === 'research' || ((!dedicatedIELTS || !olderIELTSEvents.has(item.eventId)) && (!dedicatedSAT || !olderSATEvents.has(item.eventId)))));
   const lastIELTS = priorCompletionState.tasks.filter(task => task.completed && task.ieltsSkill && completionDate(task) < date).map(completionDate).sort().at(-1);
   const ieltsCadence = !lastIELTS || daysBetween(lastIELTS, date) >= 3 ? 25 : daysBetween(lastIELTS, date) >= 2 ? 15 : 0;
   const majorSchoolExamSoon = state.exams.some(exam => daysBetween(date, exam.date) >= 0 && daysBetween(date, exam.date) <= 2 && subjectFor(state, exam.subjectId)?.enabled);
@@ -560,6 +564,18 @@ function makeCandidates(state, date) {
     candidates.push(candidate(item.key, item.title, 'language', adjustedMinutes, item.score + (majorSchoolExamSoon ? 0 : ieltsCadence), `${item.reason}${ieltsCadence && !majorSchoolExamSoon ? ' Eine regelmäßige kurze IELTS-Einheit hält deine Vorbereitung auch vor der letzten Prüfungsphase in Gang.' : ''}`, {
       ...item, category: 'language', subjectId: state.subjects.find(subject => languageKind(subject) === 'english' && subject.enabled)?.id || '', goalId: 'language',
       score: item.score + (majorSchoolExamSoon ? 0 : ieltsCadence), minutes: adjustedMinutes,
+      steps: item.steps.map(step => typeof step === 'string' ? step : `${step.title}${step.minutes ? ` · ${step.minutes} Min.` : ''}: ${step.instruction}`),
+      resource: typeof item.resource === 'string' ? item.resource : item.resource?.url || '',
+    }));
+  }
+  // School, language tests and profile work draw from the same allowance.
+  // A joint daily cap below prevents parallel test plans from overloading it.
+  const lastSAT = priorCompletionState.tasks.filter(task => task.completed && task.satSkill && completionDate(task) < date).map(completionDate).sort().at(-1);
+  const satCadence = !lastSAT || daysBetween(lastSAT, date) >= 3 ? 20 : daysBetween(lastSAT, date) >= 2 ? 10 : 0;
+  for (const item of getSATCandidates(priorCompletionState, date)) {
+    candidates.push(candidate(item.key, item.title, 'language', majorSchoolExamSoon ? Math.min(15, item.minutes) : item.minutes, item.score + (majorSchoolExamSoon ? 0 : satCadence), item.reason, {
+      ...item, category: 'language', subjectId: '', goalId: 'tests',
+      score: item.score + (majorSchoolExamSoon ? 0 : satCadence), minutes: majorSchoolExamSoon ? Math.min(15, item.minutes) : item.minutes,
       steps: item.steps.map(step => typeof step === 'string' ? step : `${step.title}${step.minutes ? ` · ${step.minutes} Min.` : ''}: ${step.instruction}`),
       resource: typeof item.resource === 'string' ? item.resource : item.resource?.url || '',
     }));
@@ -672,6 +688,10 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
     }
     // Started writing deserves a place, but does not freeze the old duration
     // after a busy day reduces the available time.
+    if (task.satSkill === 'full' && (budget < requestedMinutes || !placeTasks([...retained, task], availability.freeWindows).at(-1)?.sessions.some(session => clockMinutes(session.end) - clockMinutes(session.start) >= 144))) {
+      parked.push({ ...task, skipped: true, sessions: [], start: '', end: '' });
+      continue;
+    }
     const minutes = Math.min(requestedMinutes, budget);
     retained.push({ ...task, minutes, ...(task.skipped !== undefined ? { skipped: false } : {}), steps: minutes < requestedMinutes ? words(['Nutze diese kurze Einheit für einen kleinen Teil der Aufgabe.', ...task.steps], 12) : task.steps });
     budget -= minutes;
@@ -684,16 +704,17 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
   // Make the first two actions the most urgent, then keep breadth where urgency allows.
   for (const item of candidates) {
     if (picked.length >= remainingCount || budget < 5) break;
-    if (item.ieltsSkill && [...retained, ...picked].some(task => task.ieltsSkill)) continue;
+    if ((item.ieltsSkill || item.satSkill) && [...retained, ...picked].some(task => task.ieltsSkill || task.satSkill)) continue;
     if (picked.length >= 2 && item.score < 140 && picked.some(task => task.category === item.category) && candidates.some(other => !picked.includes(other) && other.score >= 40 && !picked.some(task => task.category === other.category))) continue;
     const slotsLeft = remainingCount - picked.length;
     const reserved = Math.min(Math.max(0, slotsLeft - 1) * 5, Math.max(0, budget - 5));
     // "More" uses spare capacity for deeper practice, without raising the
     // timetable allowance or adding an unbounded list of new actions.
-    const deeperSession = load.budget >= 150 && !item.roadmapAction && !item.revisionStage && !item.eventStage;
+    const deeperSession = load.budget >= 150 && !item.roadmapAction && !item.revisionStage && !item.eventStage && !item.ieltsSkill && !item.satSkill;
     const baseMinutes = deeperSession ? Math.min(item.category === 'academics' ? 60 : item.category === 'language' ? 45 : 30, Math.ceil(item.minutes * (item.category === 'academics' ? 2.4 : 2))) : item.minutes;
-    const requestedMinutes = load.effort === 'more' ? Math.ceil(baseMinutes * 1.2) : baseMinutes;
-    const minutes = Math.min(requestedMinutes, budget - reserved);
+    const requestedMinutes = load.effort === 'more' && !item.ieltsSkill && !item.satSkill ? Math.ceil(baseMinutes * 1.2) : baseMinutes;
+    if (item.satSkill === 'full' && (budget < 144 || !placeTasks([...retained, ...picked, { ...item, minutes: 144 }], availability.freeWindows).at(-1)?.sessions.some(session => clockMinutes(session.end) - clockMinutes(session.start) >= 144))) continue;
+    const minutes = item.satSkill === 'full' ? 144 : Math.min(requestedMinutes, budget - reserved);
     if (minutes < 5) continue;
     picked.push({ ...item, requestedMinutes, minutes });
     budget -= minutes;
@@ -715,7 +736,7 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
       id, date, title: item.revisionStage === 'timed' && scaled ? `${subjectLabel(subjectFor(state, item.subjectId))}: eine Prüfungs-Teilaufgabe unter Zeitdruck üben` : item.eventStage === 'rehearsal' && scaled ? `${item.title.split(':')[0]}: einen zeitgebundenen Testabschnitt üben` : item.title, category: item.category, subjectId: item.subjectId || '', examId: item.examId || '', goalId: item.goalId || '',
       roadmapItemId: item.roadmapItemId || '', roadmapStepId: item.roadmapStepId || '', linkedGoal: item.linkedGoal || '', eventId: item.eventId || (item.examId ? `exam:${item.examId}` : ''), eventSourceId: item.eventSourceId || item.examId || '', eventStage: item.eventStage || '',
       minutes: item.minutes, priority: item.priority, reason: item.reason,
-      objective: learningMetadata.objective || item.title, expectedResult: learningMetadata.expectedResult || 'Ein überprüftes Ergebnis und ein konkreter nächster Schritt.', learningTopic: learningMetadata.learningTopic || '', ieltsSkill: item.ieltsSkill || '', reviewDate: item.reviewDate || '', movedFrom: '',
+      objective: learningMetadata.objective || item.title, expectedResult: learningMetadata.expectedResult || 'Ein überprüftes Ergebnis und ein konkreter nächster Schritt.', learningTopic: learningMetadata.learningTopic || '', ieltsSkill: item.ieltsSkill || '', satSkill: item.satSkill || '', reviewDate: item.reviewDate || '', movedFrom: '',
       steps: scaled ? ['Nutze diese kurze Einheit für einen kleinen Teil der Aufgabe.', ...item.steps] : item.steps,
       resource: item.resource || '', completed: false, completedAt: null, notes: old?.notes || '', selfReview: old?.selfReview || [], origin: 'generated',
       revisionStage: item.revisionStage || '', revisionPlanId: item.revisionPlanId || '',
@@ -748,7 +769,7 @@ function planSignature(state, date) {
     testPlans: (testPlans || []).map(({ id, name, status, targetDate, targetScore }) => ({ id, name, status, targetDate, targetScore })),
   };
   const input = canonicalJSON({
-    engineVersion: 7, date, profile: planningProfile, subjects: state.subjects, grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), learning: normalizeLearning(state.learning),
+    engineVersion: 8, date, profile: planningProfile, subjects: state.subjects, grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), sat: normalizeSAT(state.sat), learning: normalizeLearning(state.learning),
     universities: state.universities, activities: state.activities, events: state.events || [], schedule: state.schedule,
     roadmapConfirmed: state.roadmapCompleted,
     // A Sunday review guides the following week. Reflection text, save time,
@@ -780,6 +801,15 @@ function placeTasks(tasks, freeWindows) {
   return tasks.map(task => {
     let remaining = task.minutes;
     const sessions = [];
+    if (task.satSkill === 'full') {
+      // A full digital test requires one uninterrupted block including its break.
+      const window = windows.find(item => item.end - item.cursor >= remaining);
+      if (window) {
+        sessions.push({ start: clock(window.cursor), end: clock(window.cursor + remaining) });
+        window.cursor += remaining;
+      }
+      return { ...task, sessions, start: sessions[0]?.start || '', end: sessions[0]?.end || '' };
+    }
     for (const window of windows) {
       if (!remaining) break;
       const duration = Math.min(remaining, window.end - window.cursor);
@@ -1042,6 +1072,7 @@ export function addTask(state, task) {
 export function editTask(state, id, patch) {
   const task = state.tasks.find(item => item.id === id);
   if (!task) return state;
+  if (task.satSkill === 'full' && patch.minutes !== undefined && Number(patch.minutes) !== 144) throw new TypeError('Ein vollständiger Bluebook-Probetest braucht 144 Minuten einschließlich Pause. Wähle für eine kurze Einheit eine andere Aufgabe.');
   return addTask(state, { ...task, ...patch, id });
 }
 /** A deliberate move preserves the task ID and writing rather than cloning it. */
@@ -1053,6 +1084,12 @@ export function moveTask(state, id, date) {
   if (state.study?.active?.taskId === id) throw new TypeError('Beende zuerst die aktive Lerneinheit.');
   const retained = state.tasks.filter(item => item.date === date && !item.skipped && (item.origin === 'custom' || item.completed || item.notes?.trim() || item.selfReview?.length));
   if (retained.length >= 5) throw new TypeError('An diesem Tag sind bereits fünf feste Aufgaben. Wähle einen anderen Tag.');
+  if (task.satSkill === 'full') {
+    const availability = getAvailability(state, date);
+    const room = availability.availableMinutes - retained.reduce((sum, item) => sum + item.minutes, 0);
+    const placement = placeTasks([...retained, { ...task, minutes: 144 }], availability.freeWindows).at(-1);
+    if (room < 144 || !placement.sessions.some(session => clockMinutes(session.end) - clockMinutes(session.start) >= 144)) throw new TypeError('Dieser Tag hat keinen freien Block von 144 Minuten. Wähle für den vollständigen Probetest einen anderen Tag.');
+  }
   return { ...state,
     tasks: state.tasks.map(item => item.id === id ? { ...item, date, origin: 'custom', movedFrom: item.movedFrom || item.date, skipped: false, sessions: [], start: '', end: '', planSignature: '' } : item),
     dismissedTaskIds: task.origin === 'generated' ? [...new Set([...(state.dismissedTaskIds || []), id])] : state.dismissedTaskIds,

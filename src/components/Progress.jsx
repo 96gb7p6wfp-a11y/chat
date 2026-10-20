@@ -5,6 +5,7 @@ import { getDailyPlan, getProgress, getWeeklyReview, saveWeeklyReview, shiftDate
 import { getStudyStats, removeStudySession } from '../study.js';
 import AcademicGrades from './AcademicGrades.jsx';
 import { getIELTSSummary } from '../ielts.js';
+import { getSATSummary } from '../sat.js';
 import { subjectLabel } from '../i18n.js';
 
 const formatDate = (date, options = { day: 'numeric', month: 'short' }) => new Intl.DateTimeFormat('de-DE', options).format(new Date(`${date}T12:00:00`));
@@ -79,6 +80,7 @@ export default function Progress({ data, today, onChange, notify, onOpenPlan, on
   const [modal, setModal] = useState(null);
   const progress = getProgress(data, today);
   const ielts = getIELTSSummary(data, today);
+  const sat = getSATSummary(data, today);
   const review = getWeeklyReview(data, week);
   const currentWeek = startOfWeek(today);
   const savedReview = (data.weeklyReviews || []).find((entry) => entry.weekStart === review.weekStart);
@@ -103,6 +105,7 @@ export default function Progress({ data, today, onChange, notify, onOpenPlan, on
 
 
       {ielts.configured && <section className="card"><SectionHeading title="IELTS Academic" action={<Button variant="secondary" onClick={() => onOpenProfile?.('IELTS')}>Ergebnisse</Button>} /><div className="academic-overview"><div><span className="field-help">Letztes vollständiges Ergebnis</span><strong>{points(ielts.overall)}</strong></div><div><span className="field-help">Mein Bandziel</span><strong>{points(ielts.data.targetOverall)}</strong></div></div><p className="muted small">{ielts.readiness}</p>{ielts.weakest && <p className="field-help">Im Fokus: {ielts.weakest.label}{ielts.weakest.gap > 0 ? ` · ${points(ielts.weakest.gap)} Bandpunkte bis zum Ziel` : ''}. Erledigte Aufgaben belegen keinen Bandwert.</p>}</section>}
+      {sat.configured && <section className="card"><SectionHeading title="SAT" action={<Button variant="secondary" onClick={() => onOpenProfile?.('SAT')}>Ergebnisse</Button>} /><div className="academic-overview"><div><span className="field-help">Letztes vollständiges Ergebnis</span><strong>{points(sat.overall)}</strong></div><div><span className="field-help">Mein Ziel</span><strong>{points(sat.data.targetTotal)}</strong></div></div><p className="muted small">{sat.readiness}</p>{sat.weakest && <p className="field-help">Im Fokus: {sat.weakest.label}. Erledigte Aufgaben sind kein Testergebnis.</p>}</section>}
 
       <section className="card"><SectionHeading title="Prüfungsvorbereitung" />{upcomingExams.length ? <div className="stack">{upcomingExams.map((exam) => <div className="exam-progress" key={exam.id}><div className="row spread"><div className="grow"><strong>{exam.title}</strong><p className="muted small">{formatDate(exam.date, { month: 'short', day: 'numeric' })} · {exam.completed}/{exam.total} Vorbereitungsschritte</p></div><strong>{percent(exam.readiness)}%</strong></div><div className="progress-track" role="progressbar" aria-label={`${exam.title} Fortschritt der Vorbereitung`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={percent(exam.readiness)}><span style={{ width: `${percent(exam.readiness)}%` }} /></div></div>)}</div> : <EmptyState title="Deine nächste Prüfung erscheint hier" description="Trage eine Prüfung ein, um ihre Vorbereitung zu sehen." action={onOpenPlan && <Button onClick={() => onOpenPlan('exams')}>Prüfung hinzufügen</Button>} />}</section>
 

@@ -51,6 +51,13 @@ def expand(container, label):
         summary.click()
 
 
+
+def open_task(page, title):
+    button = page.get_by_role('button', name=f'Lernaufgabe öffnen: {title}', exact=True)
+    if not button.is_visible():
+        expand(page.locator('.further-tasks'), 'Weitere geplante Schritte')
+    button.click()
+
 def no_overflow(page):
     widths = page.evaluate('''() => ({viewport:document.documentElement.clientWidth,
       document:document.documentElement.scrollWidth,body:document.body.scrollWidth})''')
@@ -161,6 +168,7 @@ class Suite:
         detail = page.get_by_role('dialog', name='Mathematik', exact=True)
         expect(detail.locator('.academic-subject-score')).to_contain_text('9')
         expand(detail, 'Zielnote berechnen')
+        detail.get_by_label('Offene Leistungen', exact=True).select_option('1')
         detail.get_by_label('Ziel im Szenario', exact=True).fill('10')
         expect(detail.locator('.forecast-result')).to_contain_text('mindestens 12 Punkte')
         detail.get_by_label('Ziel im Szenario', exact=True).fill('15')
@@ -187,6 +195,7 @@ class Suite:
         dialog = page.get_by_role('dialog')
         expect(dialog.locator('.academic-subject-score')).to_contain_text('8')
         expand(dialog, 'Zielnote berechnen')
+        dialog.get_by_label('Offene Leistungen', exact=True).select_option('1')
         dialog.get_by_label('Ziel im Szenario', exact=True).fill('10')
         expect(dialog.locator('.forecast-result')).to_contain_text('fehlt')
         dialog.get_by_label('Gewicht jeder offenen Leistung', exact=True).fill('2')
@@ -289,7 +298,7 @@ class Suite:
     def ielts_setup_results_and_skill_priorities(self):
         page = self.personal_page()
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='IELTS', exact=True).click()
+        page.get_by_role('tab', name='IELTS & SAT', exact=True).click()
         page.get_by_role('button', name='Ziel festlegen', exact=True).click()
         dialog = page.get_by_role('dialog')
         expect(dialog.get_by_label('Prüfungsdatum (optional)', exact=True)).to_have_value('')
@@ -322,7 +331,7 @@ class Suite:
         assert self.with_ielts
         page = self.page(seed=self.with_ielts)
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='IELTS', exact=True).click()
+        page.get_by_role('tab', name='IELTS & SAT', exact=True).click()
         writing = page.locator('details.ielts-skill').filter(has=page.locator('summary').filter(has_text='Writing'))
         writing.locator('summary').click()
         writing.get_by_role('button', name='Fehlernotiz hinzufügen', exact=True).click()
@@ -367,7 +376,7 @@ class Suite:
         page = self.personal_page()
         tasks = today_tasks(page)
         academic = next(task for task in tasks if task.get('subjectId') and not task.get('roadmapStepId'))
-        page.get_by_role('button', name=f'Lernaufgabe öffnen: {academic["title"]}', exact=True).click()
+        open_task(page, academic["title"])
         expect(page.get_by_role('region', name='So lernst du')).to_be_visible()
         assert page.locator('.guided-phases li').count() >= 3
         expect(page.locator('.guided-result')).not_to_have_text('')
@@ -391,7 +400,7 @@ class Suite:
     def task_skip_preserves_draft_and_rebalances(self):
         page = self.personal_page()
         task = next(task for task in today_tasks(page) if task.get('subjectId') and not task.get('roadmapStepId'))
-        page.get_by_role('button', name=f'Lernaufgabe öffnen: {task["title"]}', exact=True).click()
+        open_task(page, task["title"])
         expand(page.get_by_role('dialog'), 'Ergebnis & Wiederholung')
         page.get_by_label('Deine Antwort oder dein Lösungsweg', exact=True).fill('Dieser Entwurf darf beim Neuplanen nicht verschwinden.')
         expand(page.get_by_role('dialog'), 'Aufgabe anpassen')
@@ -406,7 +415,7 @@ class Suite:
     def focus_start_pause_resume_saves_actual_time(self):
         page = self.personal_page()
         task = today_tasks(page)[0]
-        page.get_by_role('button', name=f'Lernaufgabe öffnen: {task["title"]}', exact=True).click()
+        open_task(page, task["title"])
         expand(page.get_by_role('dialog'), 'Fokustimer')
         page.get_by_role('button', name='Fokus starten', exact=True).click()
         expect(page.get_by_role('dialog', name='Fokuszeit')).to_be_visible()
@@ -428,7 +437,7 @@ class Suite:
     def task_move_edit_replace(self):
         page = self.personal_page()
         task = today_tasks(page)[0]
-        page.get_by_role('button', name=f'Lernaufgabe öffnen: {task["title"]}', exact=True).click()
+        open_task(page, task["title"])
         expand(page.get_by_role('dialog'), 'Aufgabe anpassen')
         page.get_by_role('button', name='Verschieben', exact=True).click()
         dialog = page.get_by_role('dialog')
@@ -437,7 +446,7 @@ class Suite:
         wait_state(page, f'data.tasks.some(task => task.id === {json.dumps(task["id"])} && task.date === "2026-10-20")')
         assert len(today_tasks(page)) <= 5
         chosen = today_tasks(page)[0]
-        page.get_by_role('button', name=f'Lernaufgabe öffnen: {chosen["title"]}', exact=True).click()
+        open_task(page, chosen["title"])
         expand(page.get_by_role('dialog'), 'Aufgabe anpassen')
         page.get_by_role('button', name='Bearbeiten', exact=True).click()
         dialog = page.get_by_role('dialog')
@@ -446,7 +455,7 @@ class Suite:
         dialog.get_by_role('button', name='Änderungen speichern', exact=True).click()
         wait_state(page, f'data.tasks.some(task => task.id === {json.dumps(chosen["id"])} && task.title === "Gezielt überarbeitete Testaufgabe")')
         generated = next(item for item in today_tasks(page) if item['origin'] == 'generated' and item['id'] != chosen['id'])
-        page.get_by_role('button', name=f'Lernaufgabe öffnen: {generated["title"]}', exact=True).click()
+        open_task(page, generated["title"])
         expand(page.get_by_role('dialog'), 'Aufgabe anpassen')
         page.get_by_role('button', name='Andere Aufgabe wählen', exact=True).click()
         wait_state(page, f'data.tasks.some(task => task.id === {json.dumps(generated["id"])} && task.skipped)')
@@ -509,7 +518,7 @@ class Suite:
     def keyboard_height_modal_stays_usable(self):
         page = self.personal_page()
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='IELTS', exact=True).click()
+        page.get_by_role('tab', name='IELTS & SAT', exact=True).click()
         page.get_by_role('button', name='Ergebnis erfassen', exact=True).click()
         page.set_viewport_size({'width': 390, 'height': 390})
         notes = page.get_by_label('Notiz (optional)', exact=True)
@@ -544,7 +553,7 @@ class Suite:
                 navigate(page, label)
                 no_overflow(page)
             navigate(page, 'Profil')
-            for label in ['Überblick', 'Fächer', 'Erfahrungen', 'Hochschulen', 'IELTS', 'Zeitplan', 'Einstellungen']:
+            for label in ['Überblick', 'Fächer', 'Erfahrungen', 'Hochschulen', 'IELTS & SAT', 'Zeitplan', 'Einstellungen']:
                 page.get_by_role('tab', name=label, exact=True).click()
                 no_overflow(page)
             page.add_style_tag(content=':root { font-size: 200% !important; }')
@@ -594,7 +603,7 @@ class Suite:
         assert len(state(page)['roadmapCompleted']) == 2
         navigate(page, 'Heute')
         linked = next(task for task in today_tasks(page) if task.get('roadmapItemId'))
-        page.get_by_role('button', name=f"Lernaufgabe öffnen: {linked['title']}", exact=True).click()
+        open_task(page, linked['title'])
         expand(page.get_by_role('dialog'), 'Dein langfristiges Ziel')
         page.get_by_role('button', name='Zum Studienweg', exact=True).click()
         expect(page.locator(f'[data-milestone-id="{linked["roadmapItemId"]}"]')).to_be_attached()
@@ -605,7 +614,7 @@ class Suite:
         page = self.personal_page()
         original = today_tasks(page)
         task = original[0]
-        page.get_by_role('button', name=f"Lernaufgabe öffnen: {task['title']}", exact=True).click()
+        open_task(page, task['title'])
         dialog = page.get_by_role('dialog')
         expand(dialog, 'Ergebnis & Wiederholung')
         dialog.get_by_label('Deine Antwort oder dein Lösungsweg', exact=True).fill('Testentwurf: diesen Lösungsweg morgen weiter prüfen.')
