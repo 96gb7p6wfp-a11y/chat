@@ -32,7 +32,7 @@ function FormField({ label, help, children }) { const generatedId = useId(); con
 function ErrorNote({ error }) { return error ? <p className="form-error" role="alert">{error}</p> : null; }
 function Actions({ onCancel, label = 'Speichern' }) { return <div className="sheet-footer"><button type="button" className="button button-secondary" onClick={onCancel}>Abbrechen</button><button type="submit" className="button button-primary"><Check size={16}/>{label}</button></div>; }
 
-export default function Profile({ data, today, onChange, notify, onRestartSetup, onExport, onImport, onOpenSchedule, onOpenProgress, onOpenSchoolImport, initialSection = 'Goals' }) {
+export default function Profile({ data, today, onChange, notify, onRestartSetup, onExport, onImport, onOpenSchedule, onOpenProgress, onOpenSchoolImport, initialSection = 'Goals', embedded = false }) {
   const [tab, setTab] = useState(TABS.includes(initialSection) ? initialSection : initialSection === 'SAT' ? 'IELTS' : 'Goals');
   const [modal, setModal] = useState(null);
   const [pathway, setPathway] = useState('All');
@@ -49,10 +49,10 @@ export default function Profile({ data, today, onChange, notify, onRestartSetup,
     setModal(null);
   };
   return <div className="profile-page stack">
-    <header className="page-header"><div className="page-kicker">DEINE RICHTUNG</div><h1 className="page-title">Profil</h1><p className="muted">Deine Ziele. Deine Erfahrungen. Dein nächster Schritt.</p></header>
-    <div className="tabs-scroll" role="tablist" aria-label="Profilbereiche" onKeyDown={tabKey}>{TABS.map(name => <button type="button" role="tab" tabIndex={tab === name ? 0 : -1} aria-selected={tab === name} aria-controls={`profile-${name.toLowerCase()}`} id={`tab-${name.toLowerCase()}`} key={name} onClick={() => setTab(name)} className={tab === name ? 'active' : ''}>{TAB_LABELS[name]}</button>)}</div>
+    {!embedded && <header className="page-header"><div className="page-kicker">DEINE RICHTUNG</div><h1 className="page-title">Profil</h1><p className="muted">Deine Ziele. Deine Erfahrungen. Dein nächster Schritt.</p></header>}
+    {embedded ? <FormField label="Profilbereich"><select value={tab} onChange={event => setTab(event.target.value)}>{TABS.map(name => <option key={name} value={name}>{TAB_LABELS[name]}</option>)}</select></FormField> : <div className="tabs-scroll" role="tablist" aria-label="Profilbereiche" onKeyDown={tabKey}>{TABS.map(name => <button type="button" role="tab" tabIndex={tab === name ? 0 : -1} aria-selected={tab === name} aria-controls={`profile-${name.toLowerCase()}`} id={`tab-${name.toLowerCase()}`} key={name} onClick={() => setTab(name)} className={tab === name ? 'active' : ''}>{TAB_LABELS[name]}</button>)}</div>}
     {(data.demo || data.demoData || data.isDemo) && <p className="sample-note">Beispieldaten zum Ausprobieren. Deine echten Angaben kannst du jederzeit eintragen.</p>}
-    <section id={`profile-${tab.toLowerCase()}`} role="tabpanel" aria-labelledby={`tab-${tab.toLowerCase()}`} className="stack">
+    <section id={`profile-${tab.toLowerCase()}`} role={embedded ? "region" : "tabpanel"} aria-label={embedded ? TAB_LABELS[tab] : undefined} aria-labelledby={embedded ? undefined : `tab-${tab.toLowerCase()}`} className="stack">
       {tab === 'Goals' && <>
         {onOpenSchoolImport && <button className="profile-import-entry" onClick={() => onOpenSchoolImport()}><CalendarDays size={19}/><span><strong>Deine Q1-Unterlagen</strong><small>Stundenplan, bestätigte Klausuren & Deutsch-Ergebnis prüfen</small></span><ChevronRight size={17}/></button>}
         <section className="card stack profile-direction"><div className="section-heading"><div><p className="page-kicker">BIS ZUR UNIVERSITÄT</p><h2>{data.profile.name ? `${data.profile.name}, dein Weg` : 'Dein Weg'}</h2></div><button className="icon-button" aria-label="Ziele bearbeiten" onClick={() => setModal({ type: 'goals' })}><Edit3 size={18}/></button></div>

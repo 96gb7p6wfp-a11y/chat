@@ -4,7 +4,7 @@ import { Button, Field } from './UI.jsx';
 import { addGrade } from '../coach.js';
 import { GRADE_LABELS, GRADE_TYPES } from '../grades.js';
 import SemesterEstimate from './SemesterEstimate.jsx';
-import { RECOVERY_MOODS, RECOVERY_CAUSES, getExamReflection, saveExamReflection, getReturnedExamGrade, getPossibleExamGradeMatches, linkReturnedExamGrade, buildReturnedExamGrade, getRecoveryPlan } from '../recovery.js';
+import { RECOVERY_MOODS, RECOVERY_CAUSES, getExamReflection, saveExamReflection, getReturnedExamGrade, getPossibleExamGradeMatches, linkReturnedExamGrade, buildReturnedExamGrade, getRecoveryPlan, getRecoveryOutcome } from '../recovery.js';
 import './exam-recovery.css';
 
 const fmt = value => value == null ? '—' : Number(value).toLocaleString('de-DE', { maximumFractionDigits: 1 });
@@ -14,6 +14,7 @@ export default function ExamRecovery({ data, exam, today, onChange, onPractice }
   const [gradeForm, setGradeForm] = useState(grade || { points: '', type: '', date: '', semester: '', weight: '', note: '', confirmNew: false });
   const [error, setError] = useState(''), [message, setMessage] = useState('');
   const subject = data.subjects.find(item => item.id === exam.subjectId);
+  const outcome = getRecoveryOutcome(data, exam.id, today);
   const plan = getRecoveryPlan(data, exam.id, today), completed = plan.filter(stage => stage.completed).length;
   const matches = getPossibleExamGradeMatches(data, exam.id).filter(item => item.id !== grade?.id);
   const set = key => event => setForm(current => ({ ...current, [key]: event.target.value }));
@@ -32,7 +33,7 @@ export default function ExamRecovery({ data, exam, today, onChange, onPractice }
     <details className="product-details" open={form.mood === 'poor' || undefined}><summary>Was war schwierig?</summary><div className="stack"><p className="field-help">Wähle nur, was du selbst beobachtet hast. Ohne Feedback beginnt der Plan mit einer vorläufigen Diagnose.</p><div className="recovery-causes">{Object.entries(RECOVERY_CAUSES).map(([value, label]) => <label key={value}><input type="checkbox" checked={form.causes.includes(value)} onChange={event => setForm(current => ({ ...current, causes: event.target.checked ? [...current.causes, value] : current.causes.filter(cause => cause !== value) }))}/><span>{label}</span></label>)}</div><Field label="Feedback der Lehrkraft · optional"><textarea rows="3" maxLength="3000" value={form.teacherFeedback} onChange={set('teacherFeedback')} placeholder="Konkreter Hinweis aus deiner Klausur"/></Field><Field label="Wo gingen Punkte verloren? · optional"><textarea rows="2" maxLength="2000" value={form.lostPoints} onChange={set('lostPoints')}/></Field><Field label="Dein nächstes Verbesserungsziel · optional"><input maxLength="500" value={form.goal} onChange={set('goal')} placeholder="z. B. Textbeleg und Wirkung verbinden"/></Field></div></details>
     <div className="recovery-actions"><Button variant="secondary" onClick={() => save(false)}>Eindruck speichern</Button><Button onClick={() => save(true)}>{stored?.startDate ? 'Plan aktualisieren' : 'Verbesserungsplan starten'} <ArrowRight size={15}/></Button></div>
     {stored?.causes?.length > 0 && <p className="field-help">Aktueller Übungsschwerpunkt: {RECOVERY_CAUSES[stored.causes[0]]}.{stored.causes.length > 1 ? ' Weitere beobachtete Schwierigkeiten bleiben gespeichert.' : ''}</p>}
-    {stored?.startDate && exam.subjectId !== 'english' && <p className="field-help">Wähle vor der Übung dein konkretes Fehlerthema. Für dieses Fach ist noch kein ursachenspezifisches Diagnosemodul hinterlegt.</p>}
+    {stored?.startDate && !['english','german'].includes(exam.subjectId) && <p className="field-help">Wähle vor der Übung dein konkretes Fehlerthema. Für dieses Fach ist noch kein ursachenspezifisches Diagnosemodul hinterlegt.</p>}
     {message && <p className="field-help" role="status">{message}</p>}
     {plan.length > 0 && <section className="recovery-plan"><div className="recovery-plan-top"><h4>Dein nächster Schritt</h4><span>{completed} / {plan.length}</span></div><ol>{plan.map(stage => <li key={stage.id} className={stage.completed ? 'is-complete' : ''}><span>{stage.completed ? '✓' : `${stage.minutes} Min.`}</span><div><strong>{stage.label}</strong><small>{stage.date < today && !stage.completed ? 'Wird neu eingeordnet' : new Intl.DateTimeFormat('de-DE', { day: 'numeric', month: 'short' }).format(new Date(`${stage.date}T12:00:00`))}{stage.provisional && stage.id.endsWith('-diagnose') ? ' · vorläufig' : ''}</small></div></li>)}</ol><p className="field-help">Die Tage sind eine Reihenfolge, keine zusätzlichen Pflichtstunden. Klausuren und deine verfügbare Lernzeit haben Vorrang.</p>{onPractice && <Button variant="secondary" onClick={onPractice}>Nächste eingeplante Übung öffnen</Button>}</section>}
     <details className="product-details"><summary>{grade ? 'Zurückgegebene Note bearbeiten' : 'Offizielle Note ist zurück'}</summary><form className="stack" onSubmit={event => {
@@ -51,6 +52,7 @@ export default function ExamRecovery({ data, exam, today, onChange, onPractice }
       <Field label="Bestätigtes relatives Einzelgewicht" help="Gewicht 2 zählt doppelt wie 1, falls du nach Einzelgewichten rechnest. Deine Fachregelung wird dadurch nicht geändert."><input type="number" min="0.001" max="100000" step="any" value={gradeForm.weight} onChange={setGrade('weight')} required/></Field><Field label="Notiz · optional"><textarea rows="2" maxLength="3000" value={gradeForm.note} onChange={setGrade('note')}/></Field><Button type="submit">Bestätigte Note speichern</Button>
     </form></details>
     <details className="product-details"><summary>Was kann Mitarbeit noch verändern?</summary><SemesterEstimate data={data} subjectId={exam.subjectId} semester={exam.semester || grade?.semester || data.profile?.schoolYear || 'Q1'} onChange={onChange}/></details>
+    {stored?.startDate && <details className="product-details"><summary>Hat die Übung geholfen?</summary><p className="field-help">{outcome.completed} Nachbereitungseinheiten abgeschlossen.{outcome.difference !== null ? ` Spätere vergleichbare Leistung: ${fmt(outcome.later)} Punkte (${outcome.difference>0?'+':''}${fmt(outcome.difference)}).` : ''} {outcome.explanation}</p></details>}
     {completed === plan.length && plan.length > 0 && <Field label="Verbesserung prüfen"><textarea rows="3" value={form.outcome} onChange={set('outcome')} placeholder="Was klappt jetzt besser? Welche konkrete Rückmeldung oder spätere Leistung zeigt das?"/></Field>}
     {error && <p className="form-error" role="alert">{error}</p>}
   </div>;

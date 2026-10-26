@@ -13,7 +13,7 @@ import re
 import time
 import traceback
 from playwright.sync_api import sync_playwright, expect
-from coach_upgrade_browser import KEY, close_dialog, expand, navigate, no_overflow, state, wait_state
+from coach_upgrade_browser import open_plan_view, select_profile_section, KEY, close_dialog, expand, navigate, no_overflow, state, wait_state
 
 TODAY = '2026-10-25'
 NOW = datetime(2026, 10, 25, 8, 0, tzinfo=timezone.utc)
@@ -78,8 +78,8 @@ class TutorSuite:
     def open_english(self, page):
         navigate(page, 'Heute')
         button = page.get_by_role('button', name='Lernaufgabe öffnen: Englisch · konkrete Klausurvorbereitung', exact=True)
-        if not button.is_visible() and page.locator('.further-tasks').count():
-            expand(page.locator('.further-tasks'), 'Weitere geplante Schritte')
+        if not button.is_visible():
+            expand(page.locator('.full-day'), 'Tagesplan & Verlauf')
         button.click()
         expect(page.get_by_role('region', name='Interaktive Lerneinheit')).to_be_visible()
         return page.get_by_role('dialog')
@@ -91,9 +91,9 @@ class TutorSuite:
 
     def home_improvement_opens_the_relevant_subject(self):
         page = self.page(seed=self.fixture(), dark=True)
-        opportunity = page.get_by_role('region', name='Deine größte Lernchance')
-        expect(opportunity).to_contain_text('Mathematik')
-        opportunity.get_by_role('button').click()
+        expand(page.locator('.full-day'), 'Tagesplan & Verlauf')
+        page.get_by_role('button', name='Fortschritt ansehen', exact=True).click()
+        page.get_by_role('button', name='Mathematik: Noten und Ziel berechnen', exact=True).click()
         expect(page.get_by_role('dialog', name='Mathematik', exact=True)).to_be_visible()
         expect(page.get_by_role('dialog').locator('.forecast-result')).to_be_visible()
         no_overflow(page)
@@ -185,7 +185,8 @@ class TutorSuite:
         self.shot(page, '03-english-start')
         dialog.get_by_role('button', name='Lernen starten', exact=True).click()
         expect(dialog).to_contain_text('1954')
-        dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
+        if dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).count():
+            dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
         answer = dialog.get_by_label('Deine Antwort', exact=True)
         answer.fill('QA-Entwurf: The Supreme Court ruled against segregated public schools.')
         wait_state(page, 'data.learning.sessions.some(item => item.taskId === "qa-english-tutor" && Object.values(item.answers).some(answer => answer.includes("QA-Entwurf")))')

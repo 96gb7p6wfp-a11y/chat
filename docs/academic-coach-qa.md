@@ -6,46 +6,48 @@ dates and achievements are test scenarios, not application defaults.
 
 ## Verified release checks — 26 October 2026
 
-- Node.js 24.19.0, npm 11.9.0; frozen dependency lock retained.
-- `npm test`: **319 passed, 0 failed, 0 skipped** (`/tmp/tutor-release-unit.log`).
-- Production root and `/chat/` builds passed. Practice content, roadmap and vendor
-  assets are separate static chunks discoverable by the offline shell. Main app
-  chunk is approximately 482 kB minified / 137 kB gzip; no bundle-size warning.
-- Existing browser regression: **25/25 passed**. Q1 document repair regression:
-  **8/8 passed**. New personal-tutor browser journeys: **8/8 passed**.
-- Critical flows include confirmed 8/9-point records with explicit weights,
-  target 13, a next-score threshold of 14.8 (15 whole points), an impossible
-  22-point scenario, multiple remaining unknowns, comparison scenarios and reload.
-  These are isolated test assumptions, not the user's required school result.
-- Baseline 8.5 remains unconfirmed and cannot generate a fictitious exact forecast.
-  Home improvement opens the relevant subject directly. Unknown/unsupported
-  examination topics require a choice or explicitly show incomplete coverage.
-- Authored Civil Rights material was exercised through learning, all three
-  questions, answer input/reload, solutions, self-checks, mandatory retry,
-  saved mistake, completion and a later review. Older notes and attempts survive.
-- Responsive audit: **28/28 configurations passed** across 320/360/375/390/430/
-  768/1280 px, both themes and 100%/200% text. Populated forms, target calculation,
-  actual exercise/solution views and shortened keyboard viewports are covered.
-- Four additional targeted browser checks passed: actual exam-preview material,
-  opening the matching scheduled tutor, separate explanation paragraphs, and
-  Listening question preview with the transcript hidden before checking.
-- Hosting suite: **5/5 passed** for root and `/chat/` manifest resolution, cache
-  isolation/cleanup, offline content and bundled font fallback, authenticated/
-  private/no-store/query exclusions and base-path validation.
-- No uncaught page errors or application console errors in the tested journeys.
-  Fresh 320/390 px light/dark screenshots were inspected; artifacts remain in
-  ignored `test-results/` and execution logs under `/tmp/`.
+- Node.js 24, npm 11; dependency lock and existing Pages workflow retained.
+- `npm test`: **464 passed, 0 failed, 0 skipped**. New coverage includes
+  university provenance, SAT relevance, informal diagnostic feedback, backward
+  Abitur scenarios, official conversion boundaries, legal rule risks and
+  additive-data preservation.
+- Production root and `/chat/` builds pass. Main application is approximately
+  584 kB minified / 166 kB gzip and emits Vite's 500 kB size advisory. An attempted
+  extra manual chunk caused a production initialization cycle; it was removed,
+  and browser startup was tested. Stable vendor/domain assets remain cached.
+- Browser journeys: maintained coach **25/25**, Q1 UX **8/8**, personal tutor
+  **8/8**, Hessen **8/8**, new growth coach **7/7**. Core flows include first
+  launch, three-area navigation, UCL versus UCLA, provisional 2027 references,
+  source verification, SAT diagnostic and real Bluebook input, dated provider
+  comparisons, personal Abitur target, reversible Q1–Q4 scenarios, poor-exam
+  diagnosis, real exercises, self-checks and retained drafts.
+- Mobile regression: **28/28** width/theme/text configurations at
+  320/360/375/390/430/768/1280 px and 100%/200% text. New populated goal,
+  requirement-source, SAT/IELTS, diagnostic, provider-date and Abitur forms pass
+  **16/16** configurations. References are expanded during checks.
+- Actual defects found and fixed: production chunk initialization, a missing
+  recovery-view import, inaccessible skipped drafts, a rotated disclosure
+  arrow extending 2 px outside the viewport, and overly large narrow headings.
+  No global horizontal-overflow hiding was added.
+- Hosting suite **5/5**: root and project-path manifests, scoped cache cleanup,
+  offline shell/fonts, private/authenticated/no-store/query exclusions and
+  valid base paths. Worker generation is `v10`; data remains in the existing
+  `northstar.coach.v2` local storage key.
+- No uncaught page errors or application console errors in passing journeys.
+  Screenshots of actual exercises, populated IELTS forms, source references,
+  target scenarios and phone layouts were inspected.
 
-Physical iPhone Safari, its native keyboard/date picker and installed Home Screen
-acceptance remain unverified. Headless Chromium has no English speech voice, so
-Listening's honest unavailable-voice fallback was checked; audible playback needs
-a supported device. Authored content covers 17 modules, not the entire curriculum.
-Writing and confidence checks are self-assessments, not automatic school grades,
-IELTS bands or a qualified tutor's correction. Unsupported content says so.
+The official consolidated Hessen OAVO, current through the June 2026 amendment,
+and the published 2028 written dates were inspected. Full attendance/special-case
+eligibility and the complete official subject curriculum remain incomplete.
+UCL's 2027 source is explicitly provisional for 2028. SAT dates/fees and British
+Council guidance are dated source snapshots; IELTS price and all seat availability
+remain unverified. See the separate source audits.
 
-Official provider prices, dates and document rules remain linked rather than
-claimed live-verified. Publication is verified separately through the existing
-Pages workflow and public release bytes/browser flow.
+Physical iPhone Safari, native date pickers/keyboards, audible speech synthesis
+and installed Home Screen acceptance still need a real device. Writing checks
+are self-assessments, not official marks or reliable machine essay correction.
+Publication is verified separately against the actual deployed release bytes.
 
 ## Repeatable checks
 
@@ -63,8 +65,9 @@ python3 tests/coach_upgrade_browser.py --url http://127.0.0.1:4176
 python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
 python3 tests/personal_tutor_browser.py --url http://127.0.0.1:4176
 python3 tests/responsive_browser.py --url http://127.0.0.1:4176
-python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
-python3 tests/responsive_browser.py --url http://127.0.0.1:4176
+python3 tests/hessen_browser.py --url http://127.0.0.1:4176
+python3 tests/growth_coach_browser.py --url http://127.0.0.1:4176
+python3 tests/growth_forms_browser.py --url http://127.0.0.1:4176
 python3 tests/hosting_smoke.py
 ```
 

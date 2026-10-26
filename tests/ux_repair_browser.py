@@ -16,7 +16,7 @@ import time
 import traceback
 
 from playwright.sync_api import sync_playwright, expect
-from coach_upgrade_browser import Suite, TODAY, state, wait_state, navigate, close_dialog, expand, no_overflow, today_tasks
+from coach_upgrade_browser import open_plan_view, select_profile_section, Suite, TODAY, state, wait_state, navigate, close_dialog, expand, no_overflow, today_tasks
 
 RESULTS = Path(__file__).resolve().parents[1] / 'test-results' / 'ux-repair'
 EXAMS = {
@@ -42,7 +42,7 @@ class RepairSuite(Suite):
 
     def open_documents(self, page):
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='Überblick', exact=True).click()
+        select_profile_section(page, 'Überblick')
         page.get_by_role('button', name=re.compile('Q1-Unterlagen')).click()
         expect(page.get_by_role('dialog', name='Deine Q1-Unterlagen')).to_be_visible()
 
@@ -97,8 +97,8 @@ class RepairSuite(Suite):
         assert len(state(page)['schedule']['lessons']) == 19
         close_dialog(page)
         navigate(page, 'Heute')
-        expect(page.get_by_role('region', name='Nächste Termine')).to_contain_text('Englisch')
-        expect(page.get_by_role('region', name='Nächste Termine')).to_contain_text(re.compile(r'7\s*Tage'))
+        expect(page.locator('.next-deadline')).to_contain_text('Englisch')
+        expect(page.locator('.next-deadline')).to_contain_text(re.compile(r'7\s*Tage'))
         assert any(task.get('examId') == 'q1-hessen-2026-exam-english' for task in today_tasks(page))
         assert page.locator('.daily-tasks').first.locator('.coach-task').count() <= 3
         self.imported = state(page)
@@ -153,9 +153,12 @@ class RepairSuite(Suite):
         self.shot(page, '04-grade-analysis')
         close_dialog(page)
         navigate(page, 'Heute')
-        expect(page.get_by_role('region', name='Deine heutige Mission')).to_contain_text('Englisch')
-        expect(page.get_by_role('region', name='Deine größte Lernchance')).to_contain_text('Deutsch')
-        expect(page.get_by_role('region', name='Deine größte Lernchance')).to_contain_text('LANGFRISTIG VERBESSERN')
+        expect(page.get_by_role('region', name='Dein wichtigster nächster Schritt')).to_contain_text('Englisch')
+        # German remains a recorded improvement need; the compact Home now shows
+        # the immediate English action and keeps subject analysis in Lernen.
+        german = next(subject for subject in state(page)['subjects'] if subject['id'] == 'german')
+        assert german['target'] > 4
+        assert any(grade['subjectId'] == 'german' and grade['points'] == 4 for grade in state(page)['grades'])
         self.shot(page, '04b-urgent-english-long-term-german')
         # Corrections are personal evidence: reopening the original import draft
         # must never offer to replace an edited 6-point assessment with its old 4.
@@ -178,7 +181,12 @@ class RepairSuite(Suite):
         page = self.page(seed=self.imported)
         original = today_tasks(page)
         complete = original[0]
-        page.get_by_role('button', name=f'Aufgabe abschließen: {complete["title"]}', exact=True).click()
+        button = page.get_by_role('button', name=f'Aufgabe abschließen: {complete["title"]}', exact=True)
+        if button.count():
+            button.click()
+        else:
+            expand(page.locator('.full-day'), 'Tagesplan & Verlauf')
+            page.get_by_role('button', name='Wichtigsten Schritt als erledigt markieren', exact=True).click()
         wait_state(page, f'data.tasks.some(task => task.id === {json.dumps(complete["id"])} && task.completed)')
         navigate(page, 'Fortschritt')
         expect(page.locator('body')).to_contain_text('1 /')
@@ -194,7 +202,7 @@ class RepairSuite(Suite):
         assert len(today_tasks(page)) <= 5
         assert sum(item['minutes'] for item in today_tasks(page)) <= 120
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='Erfahrungen', exact=True).click()
+        select_profile_section(page, 'Erfahrungen')
         page.get_by_role('button', name='Hinzufügen', exact=True).click()
         dialog = page.get_by_role('dialog')
         dialog.get_by_label('Name der Erfahrung', exact=True).fill('Codingprojekt · UX-QA')
@@ -221,14 +229,14 @@ class RepairSuite(Suite):
         assert self.imported
         page = self.page(seed=self.imported)
         navigate(page, 'Lernplan')
-        page.get_by_role('button', name='Prüfungen', exact=True).click()
+        open_plan_view(page, 'Prüfungen')
         page.get_by_role('button', name='Englisch · Q1-Klausur bearbeiten', exact=True).click()
         dialog = page.get_by_role('dialog')
         dialog.get_by_label('Prüfungsdatum', exact=True).fill('2026-10-27')
         dialog.get_by_label('Prüfungsthemen', exact=True).fill('QA-Szenario: Zusammenfassung\nQA-Szenario: Analyse')
         dialog.get_by_role('button', name='Prüfung speichern', exact=True).click()
         wait_state(page, 'data.exams.some(exam => exam.subjectId === "english" && exam.date === "2026-10-27")')
-        page.get_by_role('button', name='Stundenplan', exact=True).click()
+        open_plan_view(page, 'Stundenplan')
         page.locator('.lesson-day .lesson-row').first.get_by_role('button', name=re.compile('bearbeiten')).click()
         dialog = page.get_by_role('dialog')
         dialog.get_by_label('Raum · optional', exact=True).fill('QA-Raum')
@@ -254,7 +262,7 @@ class RepairSuite(Suite):
     def open_task(self, page, task):
         button = page.get_by_role('button', name=f'Lernaufgabe öffnen: {task["title"]}', exact=True)
         if not button.is_visible():
-            expand(page.locator('.further-tasks'), 'Weitere geplante Schritte')
+            expand(page.locator('.full-day'), 'Tagesplan & Verlauf')
         button.click()
 
     def imported_timetable_and_exam_overview(self):
@@ -263,7 +271,7 @@ class RepairSuite(Suite):
         navigate(page, 'Lernplan')
         no_overflow(page)
         self.shot(page, '06a-week-plan')
-        page.get_by_role('button', name='Stundenplan', exact=True).click()
+        open_plan_view(page, 'Stundenplan')
         expect(page.locator('.timetable-view')).to_contain_text('PH-LK-1')
         expect(page.locator('.timetable-view')).to_contain_text('M124')
         self.shot(page, '06-timetable-day')
@@ -271,7 +279,7 @@ class RepairSuite(Suite):
         assert page.locator('.timetable-week .lesson-row').count() == 19
         no_overflow(page)
         self.shot(page, '07-timetable-week')
-        page.get_by_role('button', name='Prüfungen', exact=True).click()
+        open_plan_view(page, 'Prüfungen')
         assert page.locator('.exam-card').count() == 9
         first = page.locator('.exam-card').first
         expect(first).to_contain_text('26.')
@@ -283,7 +291,7 @@ class RepairSuite(Suite):
         self.shot(page, '08-exams-preparation')
         # Put the study window across actual imported lessons through the editor.
         # This tests blocking, rather than an already non-overlapping evening.
-        page.get_by_role('button', name='Lernzeiten', exact=True).click()
+        open_plan_view(page, 'Lernzeiten')
         page.get_by_label('Montag Lernminuten', exact=True).fill('180')
         page.get_by_label('Montag Lernbeginn', exact=True).fill('08:00')
         page.get_by_label('Montag Lernende', exact=True).fill('17:00')
@@ -303,7 +311,7 @@ class RepairSuite(Suite):
         assert self.imported
         page = self.page(seed=self.imported, width=320, dark=True)
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='IELTS & SAT', exact=True).click()
+        select_profile_section(page, 'IELTS & SAT')
         page.get_by_role('button', name='Ziel festlegen', exact=True).click()
         dialog = page.get_by_role('dialog', name='Dein IELTS-Ziel')
         dialog.get_by_label('Prüfungsdatum (optional)', exact=True).fill('2027-01-23')
@@ -373,13 +381,13 @@ class RepairSuite(Suite):
                     if lesson['day'] == 1:
                         assert session['end'] <= lesson['start'] or session['start'] >= lesson['end'], (session, lesson)
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='IELTS & SAT', exact=True).click()
+        select_profile_section(page, 'IELTS & SAT')
         page.get_by_role('group', name='Testvorbereitung wählen').get_by_role('button', name='SAT', exact=True).click()
         page.get_by_role('button', name='SAT-Ziel bearbeiten', exact=True).click()
         page.get_by_label('Prüfungsdatum (optional)', exact=True).fill('2027-03-20')
         page.get_by_role('button', name='SAT-Ziel speichern', exact=True).click()
         expect(page.locator('.ielts-coach')).to_contain_text('In 152 Tagen')
-        page.get_by_role('tab', name='Einstellungen', exact=True).click()
+        select_profile_section(page, 'Einstellungen')
         with page.expect_download() as download:
             page.get_by_role('button', name='Backup exportieren', exact=True).click()
         backup_file = RESULTS / 'school-tests-backup.json'

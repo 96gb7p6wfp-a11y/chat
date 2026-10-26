@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HESSEN_SOURCES, normalizeHessen, calculateAbitur, courseAssessmentPlan, getHessenImportance } from './hessen.js';
+import { HESSEN_SOURCES, HESSEN_GRADE_CONVERSION, HESSEN_EXAM_SCHEDULE, getAbiturTargetPoints, getAbiturGrade, normalizeHessen, calculateAbitur, courseAssessmentPlan, getHessenImportance } from './hessen.js';
 
 const semesters = ['Q1', 'Q2', 'Q3', 'Q4'];
 function fixture() {
@@ -16,13 +16,19 @@ function complete(data = fixture(), points = 10) {
   return data;
 }
 
-test('official source registry never claims successful research', () => {
-  assert.equal(HESSEN_SOURCES.length, 4);
-  assert.ok(HESSEN_SOURCES.every(source => source.status === 'unverified' && source.verifiedAt === null && source.url.startsWith('https://')));
-  const result = calculateAbitur(complete());
+test('official source registry distinguishes verified statutory scope from unfinished curriculum research', () => {
+  assert.equal(HESSEN_SOURCES.length, 5);
+  assert.equal(HESSEN_SOURCES.find(source => source.id === 'oavo-current').verifiedAt, '2026-10-26');
+  assert.equal(HESSEN_SOURCES.find(source => source.id === 'kcgo').verifiedAt, null);
+  assert.equal(HESSEN_GRADE_CONVERSION.status, 'confirmed');
+  assert.match(HESSEN_GRADE_CONVERSION.version, /22.06.2026/);
+  const data = complete();
+  data.hessen.regulatoryReview = { confirmed: true, checkedDate: '2026-10-26' };
+  const result = calculateAbitur(data);
+  assert.equal(result.regulatoryValidation.sourcesVerified, true);
   assert.equal(result.regulatoryValidation.complete, false);
-  assert.equal(result.verifiedAt, null);
-  assert.match(result.regulatoryValidation.message, /Keine Zulassungs-/);
+  assert.equal(result.verifiedAt, '2026-10-26');
+  assert.ok(result.regulatoryValidation.pending.length >= 2);
 });
 
 test('examination choices 3–5 remain undecided and clearable', () => {
@@ -120,7 +126,7 @@ test('English three-hour GK expects one Klausur and never invents a second date'
   assert.equal(JSON.stringify(data.exams), before);
 });
 
-test('Mathematics LK needs two Q1 Klausuren and German four-hour GK also needs two provisionally', () => {
+test('Mathematics LK needs two Q1 Klausuren and German four-hour GK also needs two with context hours labelled', () => {
   const data = fixture();
   data.exams = [
     { id: 'math-known', subjectId: 'mathematics', title: 'Mathematik · Q1-Klausur', date: '2026-12-17' },
@@ -131,7 +137,7 @@ test('Mathematics LK needs two Q1 Klausuren and German four-hour GK also needs t
     assert.equal(plan.expected, 2);
     assert.equal(plan.unscheduledCount, 1);
     assert.equal(plan.additionalMessage, 'Eine weitere Klausur vorgesehen — Termin noch offen.');
-    assert.equal(plan.provisional, true);
+    assert.equal(plan.provisional, id === 'german');
   }
 });
 
@@ -216,7 +222,7 @@ test('course importance exposes LK contribution separately from priority urgency
   assert.equal(math.selectedExam, true);
   assert.equal(math.includedCount, 4);
   assert.match(math.reason, /anderes Fach dringender/);
-  assert.equal(math.verified, false);
+  assert.equal(math.verified, true);
 });
 
 test('normalization retains missing values and refuses non-integer confirmed semester scores', () => {
@@ -242,4 +248,96 @@ test('teacher exceptions and replacements are isolated by semester', () => {
   assert.equal(courseAssessmentPlan(data, 'german', 'Q4').weeklyHours, 4);
   assert.equal(courseAssessmentPlan(data, 'german', 'Q4').unassignedException, true);
   assert.equal(normalizeHessen(data.hessen).courseSettings.length, 2);
+});
+
+
+test('official Annex 10b boundaries use the ordinary 900-point table', () => {
+  for (const [grade, threshold] of [[1, 823], [1.1, 805], [1.3, 769], [1.5, 733], [1.7, 697], [2, 643], [3.9, 301], [4, 300]]) {
+    assert.equal(getAbiturTargetPoints(grade), threshold);
+    assert.equal(getAbiturGrade(threshold), grade);
+    if (grade !== 4) assert.equal(getAbiturGrade(threshold - 1), Math.round((grade + 0.1) * 10) / 10);
+  }
+  for (const invalid of [null, '', true, 0.9, 4.1, 1.25]) assert.equal(getAbiturTargetPoints(invalid), null);
+  for (const invalid of [null, '733', 299, 901, 733.5]) assert.equal(getAbiturGrade(invalid), null);
+});
+
+function legalSelection() {
+  const data = fixture();
+  data.subjects.push({ id: 'computer-science', level: 'GK' });
+  const counts = { mathematics: 4, physics: 4, german: 4, english: 4, history: 4, politics: 4, art: 2, religion: 4, 'computer-science': 2 };
+  data.hessen.semesterResults = data.subjects.flatMap(subject => semesters.slice(0, counts[subject.id]).map(semester => ({ id: `${subject.id}-${semester}`, subjectId: subject.id, semester, points: 10, status: 'confirmed', included: true })));
+  data.hessen.examinationSubjects = ['mathematics', 'physics', 'german', 'english', 'history'].map((subjectId, index) => ({ slot: index + 1, subjectId, points: 10, status: 'scenario', mode: index < 3 ? 'written' : 'oral' }));
+  return data;
+}
+const check = (data, code) => calculateAbitur(data).regulatoryValidation.checks.find(item => item.code === code);
+
+test('mandatory inclusion checks catch the additional subject while ordinary counts stay arithmetic', () => {
+  const data = legalSelection();
+  assert.equal(calculateAbitur(data).totalPoints, 600);
+  assert.equal(check(data, 'additional-subject-inclusion').status, 'met');
+  assert.equal(check(data, 'foreign-language-inclusion').status, 'met');
+  assert.equal(calculateAbitur(data).regulatoryValidation.complete, false);
+  data.hessen.semesterResults = data.hessen.semesterResults.filter(result => result.subjectId !== 'computer-science');
+  data.hessen.semesterResults.push(...['Q3', 'Q4'].map(semester => ({ id: `art-${semester}`, subjectId: 'art', semester, points: 10, included: true })));
+  assert.equal(calculateAbitur(data).blockI.gkCount, 24);
+  assert.equal(check(data, 'additional-subject-inclusion').status, 'risk');
+});
+
+test('zero semester results and underkurs boundaries remain risks even in a numerically high total', () => {
+  const data = legalSelection();
+  data.hessen.semesterResults[0].points = 0;
+  assert.equal(check(data, 'included-zero').status, 'risk');
+  for (const result of data.hessen.semesterResults.slice(0, 3)) result.points = 4;
+  assert.equal(check(data, 'insufficient-courses').status, 'risk');
+  data.hessen.semesterResults.forEach(result => { result.points = 10; });
+  for (const result of data.hessen.semesterResults.slice(8, 14)) result.points = 4;
+  assert.equal(check(data, 'insufficient-courses').status, 'met');
+  data.hessen.semesterResults[14].points = 4;
+  assert.equal(check(data, 'insufficient-courses').status, 'risk');
+});
+
+test('examination subject fields, minima and zero final results are independently checked', () => {
+  const data = legalSelection();
+  assert.equal(check(data, 'exam-fields').status, 'met');
+  assert.equal(check(data, 'written-fields').status, 'met');
+  data.hessen.examinationSubjects[4].subjectId = 'art';
+  assert.equal(check(data, 'exam-fields').status, 'risk');
+  data.hessen.examinationSubjects[2].subjectId = 'computer-science';
+  assert.equal(check(data, 'mandatory-exam-subjects').status, 'risk');
+  assert.equal(check(data, 'written-fields').status, 'risk');
+  data.hessen.examinationSubjects.forEach(exam => { exam.points = 4; });
+  data.hessen.examinationSubjects.slice(2).forEach(exam => { exam.points = 8; });
+  assert.equal(check(data, 'exam-minimum-subjects').status, 'risk');
+  data.hessen.examinationSubjects[0].points = 5;
+  assert.equal(check(data, 'exam-minimum-subjects').status, 'met');
+  data.hessen.examinationSubjects[1].points = 0;
+  assert.equal(check(data, 'exam-zero').status, 'risk');
+});
+
+test('published written 2028 timetable is source-specific and never changes school exam records', () => {
+  const data = legalSelection();
+  data.exams = [{ id: 'school', subjectId: 'english', date: '2026-10-26' }];
+  const original = structuredClone(data);
+  const result = calculateAbitur(data);
+  assert.equal(result.examSchedule.q4Ends, '2028-03-31');
+  for (const [id, date] of [['german', '2028-04-26'], ['english', '2028-04-28'], ['mathematics', '2028-05-03'], ['physics', '2028-05-10']]) assert.equal(HESSEN_EXAM_SCHEDULE.exams.find(exam => exam.subjectId === id).date, date);
+  assert.deepEqual(data, original);
+});
+
+test('Sport uses special practical assessments and modern languages apply Q3 communication rules', () => {
+  const data = fixture();
+  data.subjects.push({ id: 'sport', level: 'GK' });
+  data.hessen.courseSettings = [{ subjectId: 'sport', weeklyHours: 3 }];
+  let plan = courseAssessmentPlan(data, 'sport', 'Q1');
+  assert.deepEqual(plan.requiredKinds, ['practical']);
+  assert.match(plan.additionalMessage, /Besondere Fachprüfung/);
+  data.exams = [{ id: 'sport', subjectId: 'sport', semester: 'Q1', format: 'practical', date: '2026-12-01' }];
+  assert.equal(courseAssessmentPlan(data, 'sport', 'Q1').unscheduledCount, 0);
+  data.hessen.examinationSubjects[2] = { slot: 3, subjectId: 'english', mode: 'written' };
+  plan = courseAssessmentPlan(data, 'english', 'Q3');
+  assert.deepEqual(plan.requiredKinds, ['oral']);
+  assert.match(plan.additionalMessage, /Kommunikationsprüfung/);
+  assert.deepEqual(courseAssessmentPlan(data, 'english', 'Q1').requiredKinds, ['written']);
+  data.subjects.find(subject => subject.id === 'english').level = 'LK';
+  assert.deepEqual(courseAssessmentPlan(data, 'english', 'Q3').requiredKinds, ['written', 'oral']);
 });

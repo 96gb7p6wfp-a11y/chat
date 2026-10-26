@@ -1,4 +1,6 @@
 // Explainable workload guidance. These are planning limits, never score predictions.
+import { lessonBlocks } from './timetable.js';
+import { getSATRelevance } from './university-goals.js';
 export const TEST_SOURCES = { official: 'Offizielles Ergebnis', mock: 'Probeprüfung', self: 'Selbsteinschätzung' };
 export const validPreparationDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 export const preparationDay = value => validPreparationDate(value) ? Math.floor(Date.parse(`${value}T12:00:00Z`) / 86400000) : null;
@@ -9,11 +11,23 @@ export function getPreparationContext(state, today, test, requestedMinutes) {
   const day = validPreparationDate(today) ? new Date(`${today}T12:00:00Z`).getUTCDay() : 0;
   const weekStart = todayNumber === null ? null : todayNumber - (day + 6) % 7;
   const weekly = Array.isArray(state?.schedule?.weekly) ? state.schedule.weekly : [];
-  const weeklyAvailable = weekly.length ? weekly.reduce((sum, item) => sum + Math.max(0, Number(item.minutes) || 0), 0) : null;
+  const capacity = (item, dateKey) => {
+    const requested = state.schedule?.timeOverrides?.find(entry => entry.date === dateKey)?.minutes ?? Math.max(0, Number(item.minutes) || 0);
+    if (!/^\d{2}:\d{2}$/.test(item.windowStart || '') || !/^\d{2}:\d{2}$/.test(item.windowEnd || '')) return requested;
+    const minute = value => Number(value.slice(0,2))*60+Number(value.slice(3));
+    const start=minute(item.windowStart), end=minute(item.windowEnd), weekday=new Date(`${dateKey}T12:00:00Z`).getUTCDay();
+    const blocks=[...(state.schedule?.fixedActivities||[]).filter(entry=>entry.date ? entry.date===dateKey : entry.days?.includes(weekday)),...lessonBlocks(state,dateKey)].map(entry=>[Math.max(start,minute(entry.start)),Math.min(end,minute(entry.end))]).filter(([a,b])=>b>a).sort((a,b)=>a[0]-b[0]);
+    let used=0,cursor=start;
+    for(const [a,b] of blocks){used+=Math.max(0,b-Math.max(cursor,a));cursor=Math.max(cursor,b);}
+    return Math.max(0,Math.min(requested,end-start-used));
+  };
+  const weeklyAvailable = weekly.length ? weekStart === null ? weekly.reduce((sum,item)=>sum+Math.max(0,Number(item.minutes)||0),0) : Array.from({length:7},(_,offset)=>new Date((weekStart+offset)*86400000).toISOString().slice(0,10)).reduce((sum,dateKey)=>{const entry=weekly.find(item=>Number(item.day)===new Date(`${dateKey}T12:00:00Z`).getUTCDay());return sum+(entry?capacity(entry,dateKey):0);},0) : null;
   const otherName = test === 'sat' ? 'ielts' : 'sat';
   const other = state?.[otherName];
   const otherConfigured = otherName === 'ielts' ? !!(other?.examDate || other?.targetOverall != null || other?.scores?.length) : !!(other?.examDate || other?.targetTotal != null || other?.scores?.length);
-  const otherRequested = other?.enabled !== false && otherConfigured ? Math.max(0, Number(other.weeklyMinutes) || 0) : 0;
+  const relevance = otherName === 'sat' ? getSATRelevance(state, today) : null;
+  const relevant = !relevance || !relevance.items.length || relevance.shouldPrepare || state.testJourney?.sat?.prepareAnyway === true;
+  const otherRequested = relevant && other?.enabled !== false && otherConfigured ? Math.max(0, Number(other.weeklyMinutes) || 0) : 0;
   const combined = Math.max(0, Number(requestedMinutes) || 0) + otherRequested;
   const allowance = weeklyAvailable !== null && combined > weeklyAvailable ? Math.floor(Math.max(0, requestedMinutes) * weeklyAvailable / combined) : Math.max(0, requestedMinutes);
   const completed = (Array.isArray(state?.tasks) ? state.tasks : []).filter(task => task.completed && (test === 'sat' ? !!task.satSkill : !!task.ieltsSkill) && validPreparationDate(task.date) && task.date <= today);
@@ -59,4 +73,14 @@ export function getPreparationMilestones(state, today, examDate, { measured = fa
     for (let i = 0; i < 7 && date > today && (state?.exams || []).some(exam => validPreparationDate(exam.date) && Math.abs(preparationDay(exam.date) - preparationDay(date)) <= 2); i++) date = preparationShift(date, -1);
     return { ...item, date, detail: `${item.detail}${date !== item.date ? ' Wegen einer Schulklausur nach vorn verschoben.' : ''}` };
   }).filter(item => item.date >= today && item.date < examDate && !seen.has(`${item.date}:${item.title}`) && seen.add(`${item.date}:${item.title}`)).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Informal checks guide practice only; they never create a test score. */
+export const DIAGNOSTIC_SKILL_IDS = {
+  sat: { math: ['sat-diag-algebra', 'sat-diag-function', 'sat-diag-data', 'sat-diag-geometry'], readingWriting: ['sat-diag-evidence', 'sat-diag-boundary', 'sat-diag-transition'] },
+  ielts: Object.fromEntries(['listening', 'reading', 'writing', 'speaking'].map(skill => [skill, [`ielts-diag-${skill}`]])),
+};
+export function getInformalPracticeNeeds(state, test, today) {
+  const latest = [...(state.testJourney?.[test]?.diagnostics || [])].filter(attempt => validPreparationDate(attempt.date) && (!validPreparationDate(today) || attempt.date <= today)).reverse().sort((a,b) => b.date.localeCompare(a.date))[0];
+  return Object.entries(DIAGNOSTIC_SKILL_IDS[test] || {}).map(([skill,ids]) => ({ skill, count: ids.filter(id => latest?.answers?.[id]?.trim() && latest.checks?.[id] === 'review').length })).filter(item => item.count > 0).sort((a,b) => b.count - a.count);
 }

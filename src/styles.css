@@ -420,6 +420,7 @@ input::-webkit-datetime-edit { display:inline-flex;max-width:100%;padding:0; }
 .tabs-scroll > button { min-width:44px;flex:0 0 auto; }
 .stats-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,5.5rem),1fr)); }
 .bottom-nav > button { min-width:0;overflow-wrap:anywhere;hyphens:auto; }
+.action-home .quiet-details > summary::after { display:inline-grid;place-items:center;width:1em;height:1em;line-height:1; }
 .card h1,.card h2,.card h3,.modal-header h2 { overflow-wrap:anywhere; }
 .section-heading { flex-wrap:wrap; }
 .section-heading > div { flex:1 1 8rem; }

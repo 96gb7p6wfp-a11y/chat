@@ -36,8 +36,42 @@ def today_tasks(page):
     return [task for task in state(page)['tasks'] if task['date'] == TODAY and not task.get('skipped')]
 
 
+def primary_nav(page):
+    return page.locator('.bottom-nav') if page.locator('.bottom-nav').is_visible() else page.locator('.desktop-sidebar')
+
+
+PROFILE_SECTIONS = {'Überblick':'Goals','Fächer':'Subjects','Erfahrungen':'Activities','Hochschulen':'Universities','IELTS & SAT':'IELTS','Zeitplan':'Timetable','Einstellungen':'Settings'}
+
+def select_profile_section(page, label):
+    selector = page.get_by_label('Profilbereich', exact=True)
+    if selector.count():
+        selector.select_option(PROFILE_SECTIONS[label])
+    else:
+        page.get_by_role('tab', name=label, exact=True).click()
+
 def navigate(page, label):
-    page.locator('.bottom-nav').get_by_role('button', name=label, exact=True).click()
+    primary = {'Lernplan':'Lernen','Fortschritt':'Lernen','Profil':'Zukunft'}.get(label,label)
+    primary_nav(page).get_by_role('button', name=primary, exact=True).click()
+    if label == 'Lernplan':
+        open_plan_view(page, 'Woche')
+    elif label == 'Fortschritt':
+        expand(page.locator('.learning-more'), 'Rückblick & Organisation')
+        page.get_by_role('button', name='Wochenrückblick', exact=True).click()
+    elif label == 'Profil':
+        page.locator('.hub-list').get_by_role('button', name=re.compile('Mein Profil')).click()
+
+def open_plan_view(page, label):
+    if label == 'Studienweg':
+        primary_nav(page).get_by_role('button', name='Zukunft', exact=True).click()
+        page.locator('.hub-list').get_by_role('button', name=re.compile('Bewerbungsweg')).click()
+        expand(page.locator('.future-hub'), 'Allgemeine Planung für USA & Deutschland')
+        return
+    primary_nav(page).get_by_role('button', name='Lernen', exact=True).click()
+    patterns={'Woche':'^Wochenplan$','Stundenplan':'Stundenplan','Prüfungen':'Prüfungen','Termine':'Termine','Lernzeiten':'Lernzeit'}
+    button=page.locator('.learning-menu').get_by_role('button', name=re.compile(patterns[label]))
+    if not button.is_visible():
+        page.locator('.learning-more').evaluate("el=>el.open=true")
+    button.click()
 
 
 def close_dialog(page):
@@ -55,7 +89,7 @@ def expand(container, label):
 def open_task(page, title):
     button = page.get_by_role('button', name=f'Lernaufgabe öffnen: {title}', exact=True)
     if not button.is_visible():
-        expand(page.locator('.further-tasks'), 'Weitere geplante Schritte')
+        expand(page.locator('.full-day'), 'Tagesplan & Verlauf')
     button.click()
 
 def no_overflow(page):
@@ -136,10 +170,10 @@ class Suite:
         assert str(self.personal['profile']['graduationYear']) == '2028'
         assert len(today_tasks(page)) in range(1, 6)
         assert sum(task['minutes'] for task in today_tasks(page)) <= 120
-        expect(page.get_by_role('region', name='Deine heutige Mission')).to_be_visible()
+        expect(page.get_by_role('region', name='Dein wichtigster nächster Schritt')).to_be_visible()
         assert page.locator('[data-testid="daily-tasks"] .coach-task-open').count() <= 3
-        expect(page.get_by_role('region', name='Deine größte Lernchance')).to_be_visible()
-        expect(page.get_by_role('region', name='Nächste Termine')).to_be_visible()
+        expect(page.locator('.next-action .action-start')).to_be_visible()
+        assert len(page.locator('.bottom-nav button').all()) == 3
         no_overflow(page)
         self.shot(page, '01-today')
 
@@ -231,7 +265,7 @@ class Suite:
     def exam_creates_preparation_and_priority(self):
         page = self.personal_page()
         navigate(page, 'Lernplan')
-        page.get_by_role('button', name='Prüfungen', exact=True).click()
+        open_plan_view(page, 'Prüfungen')
         page.get_by_role('button', name='Prüfung hinzufügen', exact=True).click()
         dialog = page.get_by_role('dialog')
         expect(dialog.get_by_label('Prüfungsdatum', exact=True)).to_have_value('')
@@ -250,14 +284,14 @@ class Suite:
         tasks = today_tasks(page)
         assert any(task.get('examId') == exam['id'] for task in tasks)
         assert tasks[0].get('subjectId') == 'mathematics'
-        expect(page.get_by_role('region', name='Nächste Termine')).to_contain_text('Mathematik')
-        expect(page.get_by_role('region', name='Nächste Termine')).to_contain_text('26. Oktober')
+        expect(page.locator('.next-deadline')).to_contain_text('Mathematik')
+        expect(page.locator('.next-deadline')).to_contain_text('26. Okt.')
         no_overflow(page)
 
     def timetable_blocks_lessons_and_detects_conflicts(self):
         page = self.personal_page()
         navigate(page, 'Lernplan')
-        page.get_by_role('button', name='Stundenplan', exact=True).click()
+        open_plan_view(page, 'Stundenplan')
         page.get_by_role('button', name='Erste Stunde hinzufügen', exact=True).click()
         dialog = page.get_by_role('dialog')
         dialog.get_by_label('Fach', exact=True).select_option('mathematics')
@@ -284,7 +318,7 @@ class Suite:
     def alternating_timetable(self):
         page = self.personal_page()
         navigate(page, 'Lernplan')
-        page.get_by_role('button', name='Stundenplan', exact=True).click()
+        open_plan_view(page, 'Stundenplan')
         page.get_by_role('button', name='Erste Stunde hinzufügen', exact=True).click()
         dialog = page.get_by_role('dialog')
         dialog.get_by_label('Wochentag', exact=True).select_option('1')
@@ -305,7 +339,7 @@ class Suite:
     def ielts_setup_results_and_skill_priorities(self):
         page = self.personal_page()
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='IELTS & SAT', exact=True).click()
+        select_profile_section(page, 'IELTS & SAT')
         page.get_by_role('button', name='Ziel festlegen', exact=True).click()
         dialog = page.get_by_role('dialog')
         expect(dialog.get_by_label('Prüfungsdatum (optional)', exact=True)).to_have_value('')
@@ -338,7 +372,7 @@ class Suite:
         assert self.with_ielts
         page = self.page(seed=self.with_ielts)
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='IELTS & SAT', exact=True).click()
+        select_profile_section(page, 'IELTS & SAT')
         writing = page.locator('details.ielts-skill').filter(has=page.locator('summary').filter(has_text='Writing'))
         writing.locator('summary').click()
         writing.get_by_role('button', name='Fehlernotiz hinzufügen', exact=True).click()
@@ -358,7 +392,7 @@ class Suite:
     def application_profile_evidence(self):
         page = self.personal_page()
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='Erfahrungen', exact=True).click()
+        select_profile_section(page, 'Erfahrungen')
         page.get_by_role('button', name='Hinzufügen', exact=True).click()
         dialog = page.get_by_role('dialog')
         dialog.get_by_label('Name der Erfahrung', exact=True).fill('Codingprojekt · QA-Test')
@@ -388,7 +422,8 @@ class Suite:
             selector = page.get_by_label('Lernthema wählen', exact=True)
             selector.select_option(selector.locator('option:not([value=""])').first.get_attribute('value'))
         page.get_by_role('button', name='Lernen starten', exact=True).click()
-        page.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
+        if page.get_by_role('button', name='Zu den Aufgaben', exact=True).count():
+            page.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
         for index in range(12):
             page.get_by_label('Deine Antwort', exact=True).fill(f'Testantwort {index}: eigener Versuch mit nachvollziehbarer Begründung.')
             page.get_by_role('button', name='Antwort prüfen', exact=True).click()
@@ -424,6 +459,7 @@ class Suite:
         assert 'Entwurf' in retained['notes']
         assert len(today_tasks(page)) <= 5
         assert sum(item['minutes'] for item in today_tasks(page)) <= 120
+        expand(page.locator('.full-day'), 'Tagesplan & Verlauf')
         expect(page.locator('summary').filter(has_text='Für später gespeichert')).to_be_visible()
 
     def focus_start_pause_resume_saves_actual_time(self):
@@ -479,7 +515,7 @@ class Suite:
         seed = self.with_ielts or self.personal
         page = self.page(seed=seed)
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='Einstellungen', exact=True).click()
+        select_profile_section(page, 'Einstellungen')
         with page.expect_download() as download:
             page.get_by_role('button', name='Backup exportieren', exact=True).click()
         file = RESULTS / 'personal-test-backup.json'
@@ -505,7 +541,7 @@ class Suite:
         page = self.page(raw='{not valid JSON')
         expect(page.get_by_role('alert')).to_be_visible()
         assert page.evaluate('() => Object.values(localStorage).some(value => value === "{not valid JSON")')
-        assert len(page.locator('.bottom-nav button').all()) == 4
+        assert len(page.locator('.bottom-nav button').all()) == 3
         no_overflow(page)
 
     def empty_states_have_a_next_action(self):
@@ -516,23 +552,23 @@ class Suite:
         seed['tasks'] = []
         seed['schedule']['timeOverrides'] = [{'date': TODAY, 'minutes': 0}]
         page = self.page(seed=seed)
-        expect(page.get_by_role('heading', name='Zeit für Erholung', exact=True)).to_be_visible()
-        expect(page.locator('.coach-priorities').get_by_role('button', name='Lernzeit anpassen', exact=True)).to_be_visible()
+        expect(page.get_by_role('heading', name='Heute bleibt frei.', exact=True)).to_be_visible()
+        expect(page.get_by_role('button', name='Lernzeit anpassen', exact=True)).to_be_visible()
         navigate(page, 'Lernplan')
-        page.get_by_role('button', name='Prüfungen', exact=True).click()
+        open_plan_view(page, 'Prüfungen')
         expect(page.get_by_role('heading', name='Noch keine Prüfungen', exact=True)).to_be_visible()
         expect(page.get_by_role('button', name='Prüfung hinzufügen', exact=True)).to_be_visible()
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='Erfahrungen', exact=True).click()
+        select_profile_section(page, 'Erfahrungen')
         expect(page.get_by_role('button', name='Erfahrung hinzufügen', exact=True)).to_be_visible()
-        page.get_by_role('tab', name='Hochschulen', exact=True).click()
+        select_profile_section(page, 'Hochschulen')
         expect(page.get_by_role('button', name='Hochschule speichern', exact=True)).to_be_visible()
         no_overflow(page)
 
     def keyboard_height_modal_stays_usable(self):
         page = self.personal_page()
         navigate(page, 'Profil')
-        page.get_by_role('tab', name='IELTS & SAT', exact=True).click()
+        select_profile_section(page, 'IELTS & SAT')
         page.get_by_role('button', name='Ergebnis erfassen', exact=True).click()
         page.set_viewport_size({'width': 390, 'height': 390})
         notes = page.get_by_label('Notiz (optional)', exact=True)
@@ -568,7 +604,7 @@ class Suite:
                 no_overflow(page)
             navigate(page, 'Profil')
             for label in ['Überblick', 'Fächer', 'Erfahrungen', 'Hochschulen', 'IELTS & SAT', 'Zeitplan', 'Einstellungen']:
-                page.get_by_role('tab', name=label, exact=True).click()
+                select_profile_section(page, label)
                 no_overflow(page)
             page.add_style_tag(content=':root { font-size: 200% !important; }')
             for label in ['Heute', 'Lernplan', 'Fortschritt', 'Profil']:
@@ -585,7 +621,7 @@ class Suite:
         page.wait_for_function('navigator.serviceWorker.controller !== null')
         page.context.set_offline(True)
         page.reload(wait_until='domcontentloaded')
-        expect(page.get_by_role('region', name='Deine heutige Mission')).to_be_visible()
+        expect(page.get_by_role('region', name='Dein wichtigster nächster Schritt')).to_be_visible()
         assert state(page)['profile']['name'] == 'Eric'
         navigate(page, 'Fortschritt')
         expect(page.get_by_role('heading', name='Meine Noten', exact=True)).to_be_visible()
@@ -598,7 +634,7 @@ class Suite:
     def university_pathways_keep_independent_progress(self):
         page = self.personal_page()
         navigate(page, 'Lernplan')
-        page.get_by_role('button', name='Studienweg', exact=True).click()
+        open_plan_view(page, 'Studienweg')
         usa_button = page.get_by_role('button', name='USA', exact=True)
         usa_button.click()
         expect(page.locator('.roadmap-phase').first).to_be_visible()

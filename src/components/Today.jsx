@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { ArrowRight, BookOpen, BriefcaseBusiness, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Code2, GraduationCap, Languages, Plus, Target, Trophy } from 'lucide-react';
-import { getAcademicOverview } from '../grades.js';
 import { getSubjectPriorities } from '../recommendations.js';
 import { getUpcomingEvents } from '../events.js';
 import { getGuidedSession } from '../guided-learning.js';
@@ -8,7 +7,9 @@ import { subjectLabel, categoryLabel, pointLabel } from '../i18n.js';
 import { Button, EmptyState, Modal, formatDate, formatMinutes } from './UI.jsx';
 import ExamRecovery from './ExamRecovery.jsx';
 import { getExamReflection } from '../recovery.js';
+import { getUniversityGoalDeadlines } from '../university-goals.js';
 import './today.css';
+import './action-home.css';
 
 const dayDistance = (from, to) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000);
 const countdown = days => days === 0 ? 'Heute' : days === 1 ? 'Morgen' : `In ${days} Tagen`;
@@ -37,7 +38,7 @@ function taskCategory(task) {
 
 function taskReason(data, task, date, priorities) {
   const exam = data.exams.find(item => item.id === task.examId);
-  if (exam) return `Klausur ${countdown(dayDistance(date, exam.date)).toLocaleLowerCase('de-DE')}`;
+  if (exam) return exam.date < date ? 'Deinen Klausurfehler gezielt verbessern' : `Klausur ${countdown(dayDistance(date, exam.date)).toLocaleLowerCase('de-DE')}`;
   if (task.ieltsSkill) return 'Für dein IELTS-Ziel';
   if (task.satSkill) return 'Für dein SAT-Ziel';
   if (task.reviewDate) return 'Deinen früheren Fehler erneut prüfen';
@@ -45,86 +46,48 @@ function taskReason(data, task, date, priorities) {
   if (priority?.gap > 0) return `${pointLabel(priority.gap)} Punkte Abstand zu deinem Ziel`;
   if (priority?.override === 'high') return 'Dein gewählter Schwerpunkt';
   if (task.category === 'university' || task.category === 'activity') return 'Dein nächster Bewerbungsschritt';
-  return task.linkedGoal || 'Ein überprüfbarer nächster Schritt';
+  return task.category === 'language' || task.category === 'academics' ? 'Dein aktuelles Thema gezielt verbessern' : 'Ein überprüfbarer nächster Schritt';
 }
 
-function longTermPriority(priorities, data) {
-  const preferences = data.profile.prioritySubjects || [];
-  const value = item => item.gap * 8 + (preferences.includes(item.subjectId) ? 23 : 0) + (item.level === 'LK' ? 8 : 0) + (item.override === 'high' ? 45 : item.override === 'low' ? -30 : 0) + (item.trend !== null && item.trend < -1 ? Math.min(16, -item.trend * 4) : 0);
-  return [...priorities].sort((a, b) => value(b) - value(a))[0];
-}
-
-export default function Today({ data, today, date, plan, onChange, onOpenTask, onComplete, onTime, onAdd, onPlan, onProgress, onProfile, onPurpose, onChooseDay }) {
+export default function Today({ data, today, date, plan, onChange, onOpenTask, onComplete, onTime, onAdd, onPlan, onProgress, onProfile, onChooseDay, onFuture }) {
   const [reflectionExamId, setReflectionExamId] = useState('');
-  const recentExam = [...data.exams].filter(exam => exam.date <= today && dayDistance(exam.date, today) <= 14 && !getExamReflection(data, exam.id)?.mood).sort((a, b) => b.date.localeCompare(a.date))[0];
-  const reflectionExam = data.exams.find(exam => exam.id === reflectionExamId);
-  const history = plan.isHistory || date < today;
-  const preview = date > today;
-  const tasks = plan.tasks || [];
-  const complete = tasks.filter(task => task.completed).length;
-  const first = tasks.find(task => !task.completed);
-  const displayTasks = history ? tasks : [...tasks.filter(task => !task.completed), ...tasks.filter(task => task.completed)];
-  const priorities = getSubjectPriorities(data, date);
-  const priority = priorities[0];
-  const longTerm = longTermPriority(priorities, data);
-  const academics = getAcademicOverview(data);
-  const longTermAcademic = academics.subjects.find(item => item.subjectId === longTerm?.subjectId);
-  const longTermName = longTerm ? subjectLabel(data.subjects.find(subject => subject.id === longTerm.subjectId)) : '';
-  const priorityName = priority ? subjectLabel(data.subjects.find(subject => subject.id === priority.subjectId)) : first ? taskPresentation(data, first, date).subject : '';
-  const upcoming = getUpcomingEvents(data, date).filter(event => event.date >= date && event.status !== 'completed');
-  const nextExam = upcoming.find(event => event.source === 'exam');
-  const nextEvent = nextExam || upcoming[0];
-  const nextSubject = nextExam && data.subjects.find(item => item.id === nextExam.subjectId);
-  const earlierEvent = nextExam && upcoming[0]?.date < nextExam.date ? upcoming[0] : null;
+  const history = plan.isHistory || date < today, preview = date > today;
+  const tasks = plan.tasks || [], complete = tasks.filter(task => task.completed).length;
+  const pending = tasks.filter(task => !task.completed), primary = pending[0];
   const skipped = data.tasks.filter(task => task.date === date && task.skipped);
-  const until = priority?.exam ? dayDistance(date, priority.exam.date) : null;
-  const urgent = until !== null && until <= 14;
-  const allDone = tasks.length > 0 && complete === tasks.length;
+  const displayed = history ? tasks : pending;
+  const priorities = getSubjectPriorities(data, date), priority = priorities[0];
+  const goals = (data.universityGoals?.goals || []).filter(goal => goal.active !== false).sort((a,b) => ({high:0,normal:1,low:2}[a.priority] ?? 1) - ({high:0,normal:1,low:2}[b.priority] ?? 1));
+  const goal = goals[0];
+  const goalName = goal ? `${({ucl:'UCL',ucla:'UCLA',berkeley:'UC Berkeley'}[goal.institutionId] || goal.name)} · ${goal.programme}` : `Abitur ${data.profile.graduationYear || '2028'}`;
+  const upcoming = [...getUpcomingEvents(data, date),...getUniversityGoalDeadlines(data,date)].filter(event => event.date >= date && event.status !== 'completed').sort((a,b)=>a.date.localeCompare(b.date));
+  const nextEvent = upcoming[0];
+  const nextSubject = nextEvent && data.subjects.find(subject => subject.id === nextEvent.subjectId);
+  const recentExam = [...data.exams].filter(exam => exam.date <= today && dayDistance(exam.date, today) <= 14 && !getExamReflection(data, exam.id)?.mood).sort((a,b) => b.date.localeCompare(a.date))[0];
+  const reflectionExam = data.exams.find(exam => exam.id === reflectionExamId);
+  const view = primary ? taskPresentation(data, primary, date) : null;
+  const hour = new Date().getHours(), greeting = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Hallo' : 'Guten Abend';
   const noTime = !history && plan.availableMinutes === 0;
-  const shortDay = !history && plan.availableMinutes > 0 && plan.availableMinutes <= 45;
-  const motivation = history ? 'Dein Tag im Rückblick.' : allDone ? 'Heute hast du etwas bewegt.' : noTime ? 'Erholung hat ihren Platz.' : until !== null && until <= 1 ? 'Festigen. Ruhig bleiben.' : shortDay ? 'Die verfügbare Zeit zählt.' : 'Konzentriert weiter.';
-  const priorityReason = urgent ? `Deine Klausur ist ${until === 0 ? 'heute' : until === 1 ? 'morgen' : `in ${until} Tagen`}.` : priority?.gap > 0 ? `${pointLabel(priority.gap)} Punkte bis zu deinem Fachziel.` : priority?.override === 'high' || data.profile.prioritySubjects?.includes(priority?.subjectId) ? 'Dein persönlicher Schwerpunkt.' : first ? 'Dein erster Schritt im heutigen Plan.' : 'Heute ist kein Lernschritt eingeplant.';
-  const baseline = longTermAcademic?.source === 'baseline';
-  const score = longTermAcademic?.records.length === 1 ? longTermAcademic.records[0].points : longTerm?.current;
-  const scoreLabel = baseline ? 'Ausgangswert' : longTermAcademic?.records.length === 1 ? 'Letzte Leistung' : 'Kursschnitt';
-  const improvementReason = score == null ? longTermAcademic?.records.length ? 'Gewichtung noch ergänzen' : 'Aktuellen Lernstand erfassen' : longTerm?.gap > 0 ? 'Dein größtes Verbesserungsziel' : 'Deine Entwicklung im Blick';
-  const hour = new Date().getHours();
-  const greeting = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Hallo' : 'Guten Abend';
-
-  const renderTask = (task, index) => {
-    const view = taskPresentation(data, task, date);
-    const { key, Icon } = taskCategory(task);
-    return <article key={task.id} className={`coach-task task-card task-kind-${key} ${index === 0 ? 'is-first' : ''} ${task.completed ? 'is-complete' : ''}`} data-roadmap-id={task.roadmapItemId || undefined} data-event-id={task.eventId || undefined}>
+  const renderTask = task => {
+    const item = taskPresentation(data, task, date), {key,Icon} = taskCategory(task);
+    return <article className={`coach-task task-card task-kind-${key} ${task.completed ? 'is-complete' : ''}`} key={task.id} data-roadmap-id={task.roadmapItemId || undefined}>
       <button className="task-complete" aria-label={`${task.completed ? 'Abschluss rückgängig' : 'Aufgabe abschließen'}: ${task.title}`} aria-pressed={task.completed} disabled={preview} onClick={() => onComplete(task)}><Check size={17}/></button>
-      <button className="coach-task-open task-content" aria-label={`Lernaufgabe öffnen: ${task.title}`} onClick={() => onOpenTask(task)}>
-        <span className="coach-task-top"><span className="coach-task-category"><Icon size={13} aria-hidden="true"/>{view.subject}</span><span className="coach-task-duration">{task.minutes} Min.</span></span>
-        <h3>{view.title}</h3><span className="coach-task-reason">{taskReason(data, task, date, priorities)}</span>
-        {index === 0 && !task.completed && <span className="task-start">{history || preview ? 'Lernschritte ansehen' : 'Jetzt starten'}<ArrowRight size={14}/></span>}
-      </button>
-      <ChevronRight size={16} className="task-open-chevron" aria-hidden="true"/>
+      <button className="coach-task-open task-content" aria-label={`Lernaufgabe öffnen: ${task.title}`} onClick={() => onOpenTask(task)}><span className="coach-task-top"><span className="coach-task-category"><Icon size={13}/>{item.subject}</span><span className="coach-task-duration">{task.minutes} Min.</span></span><h3>{item.title}</h3><span className="coach-task-reason">{taskReason(data,task,date,priorities)}</span></button><ChevronRight size={15} className="task-open-chevron"/>
     </article>;
   };
-
-  return <section className="coach-today stack" aria-label="Dein Tagesplan">
+  return <section className="coach-today action-home" aria-label="Dein Tagesplan">
+    <header className="action-header"><div><p className="coach-greeting">{history ? 'Dein Rückblick' : preview ? 'Deine Vorschau' : greeting}</p><h1>{date === today ? 'Heute' : formatDate(date,{weekday:'long'})}</h1><p className="coach-date">{formatDate(date,{weekday:'long',day:'numeric',month:'long'})}</p></div><button className="icon-button" aria-label="Wochenplan öffnen" onClick={() => onPlan('week')}><CalendarDays size={21}/></button></header>
+    {date !== today && <button className="text-button" onClick={() => onChooseDay(today)}>Zurück zu heute <ArrowRight size={14}/></button>}
+    <section className="next-action" aria-label="Dein wichtigster nächster Schritt">
+      <button className="destination-link" onClick={() => onFuture?.('goals')}><GraduationCap size={15}/><span>{goalName}</span><ChevronRight size={13}/></button>
+      <p className="action-motivation">{noTime ? 'Erholung hat ihren Platz.' : primary ? 'Ein klarer Schritt. Dann der nächste.' : 'Für heute ist genug geschafft.'}</p>
+      {primary ? <><span className="eyebrow">JETZT WICHTIG · {view.subject}</span><h2>{view.title}</h2><p className="action-why">{taskReason(data,primary,date,priorities)}</p><Button className="action-start" onClick={() => onOpenTask(primary)} aria-label={`Lernaufgabe öffnen: ${primary.title}`}>{history || preview ? 'Lernschritte ansehen' : 'Starten'} · {primary.minutes} Min.<ArrowRight size={17}/></Button></> : <><h2>{history ? 'Dein gespeicherter Tag' : noTime ? 'Heute bleibt frei.' : 'Dein Plan ist erledigt.'}</h2><button className="text-button" onClick={onTime}>Lernzeit anpassen <Clock3 size={14}/></button></>}
+    </section>
+    {nextEvent && <button className="next-deadline" onClick={() => nextEvent.source === 'university' ? onFuture?.('goals') : onPlan(nextEvent.source === 'exam' ? 'exams' : 'events')}><CalendarDays size={18}/><span><small>{nextEvent.source === 'exam' ? 'NÄCHSTE KLAUSUR' : 'NÄCHSTER TERMIN'}</small><strong>{nextSubject ? subjectLabel(nextSubject) : nextEvent.title}</strong></span><span className="next-deadline-date">{countdown(nextEvent.daysUntil)}<small>{formatDate(nextEvent.date)}</small></span><ChevronRight size={15}/></button>}
+    <section className="coach-priorities" aria-label="Deine weiteren Prioritäten"><div className="task-list-heading"><h2>{history ? 'Deine Schritte' : 'Danach'}</h2><span>{complete} / {tasks.length}</span></div><div className="daily-tasks" data-testid="daily-tasks">{displayed.slice(history ? 0 : 1, history ? 3 : 3).map(renderTask)}</div>
+      <div className="today-completion" role="progressbar" aria-label="Heutige Aufgaben" aria-valuemin={0} aria-valuemax={Math.max(1,tasks.length)} aria-valuenow={complete}><span style={{width:`${tasks.length ? complete/tasks.length*100 : 0}%`}}/></div>
+      <details className="quiet-details full-day"><summary>Tagesplan & Verlauf <span>{formatMinutes(plan.availableMinutes)} verfügbar</span></summary><div className="stack compact">{(history ? tasks.slice(3) : [...pending.slice(3),...tasks.filter(task => task.completed)]).map(renderTask)}{primary && <button className="text-button" disabled={preview} onClick={() => onComplete(primary)}>Wichtigsten Schritt als erledigt markieren <Check size={15}/></button>}<div className="row wrap"><button className="text-button" onClick={onTime}>Lernzeit ändern</button><button className="text-button" onClick={onAdd}>Eigene Aufgabe</button><button className="text-button" onClick={onProgress}>Fortschritt ansehen</button></div>{priority && <button className="text-button" onClick={() => onProgress(priority.subjectId)}>{subjectLabel(data.subjects.find(subject => subject.id === priority.subjectId))}: Ziel berechnen <ChevronRight size={14}/></button>}{recentExam && onChange && <button className="text-button" onClick={() => setReflectionExamId(recentExam.id)}>Klausur nachbesprechen <ArrowRight size={14}/></button>}<p className="field-help">{plan.adjustment}</p>{skipped.length > 0 && <details className="quiet-details"><summary>Für später gespeichert ({skipped.length})</summary><p className="field-help">Deine Entwürfe bleiben erhalten.</p>{skipped.map(task => <button className="saved-task-row" key={task.id} onClick={() => onOpenTask(task)}>{task.title}<ChevronRight size={15}/></button>)}</details>}</div></details>
+    </section>
     {reflectionExam && onChange && <Modal title="Deine Klausur" onClose={() => setReflectionExamId('')}><ExamRecovery data={data} exam={reflectionExam} today={today} onChange={onChange}/></Modal>}
-    <header className="coach-today-header"><div><p className="coach-greeting">{history ? 'Dein Rückblick' : preview ? 'Deine Vorschau' : `${greeting}${data.profile.name ? `, ${data.profile.name}` : ''}`}</p><div className="today-title-line"><h1>{date === today ? 'Heute' : formatDate(date, { weekday: 'long' })}</h1><p className="coach-date">{formatDate(date, { day: 'numeric', month: 'long' })}</p></div></div><button className="icon-button calendar-button" aria-label="Wochenplan öffnen" onClick={() => onPlan('week')}><CalendarDays size={21}/></button></header>
-    {date !== today && <button className="text-button" onClick={() => onChooseDay(today)}>Zurück zu heute <ArrowRight size={15}/></button>}
-
-    <section className="daily-mission" aria-label="Deine heutige Mission"><span className="eyebrow">{history ? 'DEIN GESPEICHERTER TAG' : 'HEUTE WICHTIG'}</span><h2>{motivation}</h2><div className="mission-priority"><span className="mission-priority-mark" aria-hidden="true"/><div><strong>{history ? 'Deine gespeicherten Schritte' : noTime || allDone ? 'Freiraum für dich' : priorityName || 'Ein guter nächster Schritt'}</strong>{(!urgent || history || noTime || allDone) && <p>{history ? `${tasks.length} Schritte im Verlauf` : noTime || allDone ? 'Dein Plan darf auch fertig sein.' : priorityReason}</p>}</div></div>
-      {!history && <button className="mission-time" onClick={onTime} aria-label="Lernzeit anpassen"><Clock3 size={14}/><span>{formatMinutes(plan.availableMinutes)} verfügbar</span><ChevronRight size={14}/></button>}
-    </section>
-
-    {!history && !preview && recentExam && onChange && <div className="post-exam-prompt"><div><strong>{subjectLabel(data.subjects.find(subject => subject.id === recentExam.subjectId))} · Deine Klausur</strong><span>{recentExam.date === today ? 'Schon geschrieben? Halte deinen Eindruck fest.' : 'Wie lief deine Klausur?'}</span></div><Button variant="secondary" onClick={() => setReflectionExamId(recentExam.id)}>Nachbesprechen <ArrowRight size={14}/></Button></div>}
-
-    {!history && <div className="today-insights"><section className="next-events" aria-label="Nächste Termine"><span className="eyebrow">{nextExam ? 'NÄCHSTE KLAUSUR' : 'NÄCHSTER TERMIN'}</span>{nextEvent ? <button className={`next-event ${nextExam ? 'is-exam' : ''}`} onClick={() => onPlan(nextEvent.source === 'exam' ? 'exams' : 'events')}><span className="exam-count"><strong>{nextEvent.daysUntil === 0 ? 'Heute' : nextEvent.daysUntil === 1 ? 'Morgen' : nextEvent.daysUntil}</strong>{nextEvent.daysUntil > 1 && <small>Tage</small>}</span><span className="exam-name">{nextSubject ? subjectLabel(nextSubject) : nextEvent.title}</span><span className="insight-caption">{formatDate(nextEvent.date, { day: 'numeric', month: 'long' })}{nextEvent.time ? ` · ${nextEvent.time}` : ''}</span><ChevronRight size={15} className="insight-chevron"/></button> : <div className="event-empty"><h2>Termin offen</h2><button className="text-button" onClick={() => onPlan('exams')}>Prüfung eintragen <Plus size={14}/></button></div>}{earlierEvent && <button className="earlier-event" onClick={() => onPlan('events')}><span>{earlierEvent.title}</span><small>{countdown(earlierEvent.daysUntil)}</small></button>}</section>
-      {longTerm ? <section className="improvement-opportunity" aria-label="Deine größte Lernchance"><span className="eyebrow">{urgent && longTerm.subjectId !== priority?.subjectId ? 'LANGFRISTIG VERBESSERN' : 'VERBESSERUNGSZIEL'}</span><button className="improvement-open" onClick={() => onProgress(longTerm.subjectId)}><h2>{longTermName}{longTerm.level === 'LK' && <small>LK</small>}</h2><span className="opportunity-score">{score == null ? 'Stand offen' : <>{pointLabel(score)}{longTerm.target !== null && <><span> → </span>{pointLabel(longTerm.target)}</>}<small> / 15</small></>}</span><span className="insight-caption">{score == null ? improvementReason : scoreLabel}</span><span className="insight-link">Ziel berechnen <ChevronRight size={14}/></span></button></section> : <section className="improvement-opportunity"><span className="eyebrow">DEIN LERNSTAND</span><h2>Wo stehst du?</h2><button className="text-button" onClick={onProgress}>Erste Note eintragen <Plus size={14}/></button></section>}
-    </div>}
-
-    <section className="coach-priorities" aria-label="Deine wichtigsten Aufgaben"><div className="task-list-heading"><div><h2>{history ? 'Deine gespeicherten Schritte' : 'Deine nächsten Schritte'}</h2><span>{complete} von {tasks.length} geschafft</span></div>{!history && <button className="icon-button" aria-label="Eigene Priorität ergänzen" onClick={onAdd}><Plus size={20}/></button>}</div>{tasks.length > 0 && <div className="today-completion" role="progressbar" aria-label="Heutige Aufgaben" aria-valuemin={0} aria-valuemax={tasks.length} aria-valuenow={complete}><span style={{ width: `${complete / tasks.length * 100}%` }}/></div>}<div className="daily-tasks" data-testid="daily-tasks">{displayTasks.slice(0, 3).map(renderTask)}</div>
-      {tasks.length > 3 && <details className="quiet-details further-tasks"><summary>Weitere geplante Schritte ({tasks.length - 3})</summary><div className="daily-tasks">{displayTasks.slice(3).map((task, index) => renderTask(task, index + 3))}</div></details>}
-      {!tasks.length && <EmptyState title={history ? 'Kein gespeicherter Plan' : plan.availableMinutes === 0 ? 'Zeit für Erholung' : 'Heute ist noch Platz'} description={history ? 'Wähle einen anderen Tag für deinen Rückblick.' : 'Passe deine Lernzeit an oder wähle bewusst eine kleine Aufgabe.'} action={<Button variant="secondary" onClick={history ? () => onChooseDay(today) : onTime}>{history ? 'Zu heute' : 'Lernzeit anpassen'}</Button>}/>}
-      {!history && <details className="quiet-details day-context"><summary>Dein Tag im Überblick</summary><div className="row spread"><span>Eingeplant {formatMinutes(plan.plannedMinutes)}</span><span>Frei {formatMinutes(plan.remainingMinutes)}</span></div><p>{plan.adjustment}</p><div className="row wrap"><button className="text-button" onClick={onPurpose}>Vom Ziel zu heute <Target size={14}/></button><button className="text-button" onClick={() => onProfile('Subjects')}>Schwerpunkte ändern <ChevronRight size={14}/></button><button className="text-button" onClick={onProgress}>Noten & Fortschritt <ChevronRight size={14}/></button></div>{new Date(`${today}T12:00:00`).getDay() === 0 && <button className="text-button" onClick={onProgress}>Dein Wochenrückblick <ArrowRight size={14}/></button>}</details>}
-      {skipped.length > 0 && <details className="quiet-details"><summary>Für später gespeichert ({skipped.length})</summary><p>Deine Entwürfe bleiben erhalten.</p>{skipped.map(task => <button className="saved-task-row" key={task.id} onClick={() => onOpenTask(task)}>{task.title}<ChevronRight size={15}/></button>)}</details>}
-    </section>
   </section>;
 }

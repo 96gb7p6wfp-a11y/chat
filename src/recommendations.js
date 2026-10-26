@@ -3,6 +3,7 @@ import { calculateSubject } from './grades.js';
 import { lessonBlocks } from './timetable.js';
 import { getIELTSCandidates } from './ielts.js';
 import { getHessenImportance, normalizeHessen, courseAssessmentPlan } from './hessen.js';
+import { getUniversitySubjectBoost } from './university-goals.js';
 
 const stamp = date => Date.UTC(...String(date).split('-').map((part, index) => Number(part) - (index === 1 ? 1 : 0)));
 const days = (from, to) => Math.round((stamp(to) - stamp(from)) / 86_400_000);
@@ -33,7 +34,9 @@ export function getSubjectPriorities(state, date) {
     const current = confirmedSemester?.points ?? (validPoints(academic.average) ? academic.average : null);
     const importance = getHessenImportance(state, subject.id);
     const assessmentPlan = courseAssessmentPlan(state, subject.id, state.profile?.schoolYear);
-    const target = validPoints(subject.target) ? subject.target : null;
+    const university = getUniversitySubjectBoost(state, subject.id, date);
+    const ownTarget = validPoints(subject.target) ? subject.target : null;
+    const target = university.targetPoints === null ? ownTarget : Math.max(ownTarget ?? 0, university.targetPoints);
     const records = (state.grades || []).filter(grade => grade.subjectId === subject.id && grade.date <= date);
     const components = academic.source === 'baseline' ? [subject.written, subject.oral].filter(validPoints) : [];
     const gap = target === null ? 0 : Math.max(0, target - (components.length ? Math.min(...components) : current ?? target));
@@ -52,7 +55,7 @@ export function getSubjectPriorities(state, date) {
     let score = 48 + gap * 8 + (subject.level === 'LK' ? 8 : 0) + (preferred ? 23 : 0);
     const inclusionBoost = (importance.selectedExam && subject.level !== 'LK' ? 6 : 0) + Math.min(4, importance.mandatoryCount);
     const insufficient = current !== null && current < 5;
-    score += inclusionBoost + (insufficient ? 12 : 0);
+    score += inclusionBoost + (insufficient ? 12 : 0) + university.boost;
     score += trend !== null && trend <= -1 ? Math.min(16, -trend * 4) : 0;
     score += sincePractice !== null ? Math.min(12, Math.max(0, sincePractice - 3) * 2) : 0;
     score += (difficulty - 3) * 2 + (Number(subject.preference) || 0) * 5;
@@ -70,7 +73,7 @@ export function getSubjectPriorities(state, date) {
                   : `${name}: Regelmäßige Übung erhält deine Fortschritte${sincePractice !== null && sincePractice >= 7 ? `; zuletzt vor ${sincePractice} Tagen` : ''}.`;
     const minutes = availability < 5 ? 0 : Math.min(availability, until !== null && until <= 7 ? 35 : gap >= 3 || preferred ? 30 : 25);
     return { subjectId: subject.id, name, score, reason, current, target, gap, trend, exam, deadline, minutes, sincePractice, level: subject.level, override: explicit,
-      importance, assessmentPlan, insufficient, dimensions: { longTerm: importance.reason, urgency: until !== null && until <= 14 ? reason : 'Keine Prüfung in den nächsten 14 Tagen eingetragen.', improvement: insufficient ? 'Dein bekannter Punktestand liegt unter 5. Kläre zuerst konkrete Fehler und erreichbare Verbesserungen.' : gap > 0 ? `${format(gap)} Punkte Abstand zu deinem Fachziel.` : 'Kein bekannter Abstand zum Fachziel.' } };
+      importance, assessmentPlan, insufficient, university, dimensions: { longTerm: university.reason || importance.reason, urgency: until !== null && until <= 14 ? reason : 'Keine Prüfung in den nächsten 14 Tagen eingetragen.', improvement: insufficient ? 'Dein bekannter Punktestand liegt unter 5. Kläre zuerst konkrete Fehler und erreichbare Verbesserungen.' : gap > 0 ? `${format(gap)} Punkte Abstand zu deinem Fachziel.` : 'Kein bekannter Abstand zum Fachziel.' } };
   }).sort((a, b) => b.score - a.score || a.subjectId.localeCompare(b.subjectId));
 }
 

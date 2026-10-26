@@ -70,7 +70,7 @@ function ExamForm({ data, exam, today, onSave, onClose }) {
   const [form, setForm] = useState({ ...exam, id: exam?.id, createdDate: exam ? exam.createdDate || data.createdDate || today : today, subjectId: exam?.subjectId || data.subjects.find((s) => s.enabled)?.id || data.subjects[0]?.id || '', title: exam?.title || '', date: exam?.date || '', time: exam?.time || '', room: exam?.room || '', semester: exam?.semester || '', topics: topicList(exam?.topics).join('\n'), format: exam?.format || 'written', target: exam?.target ?? '', importance: exam?.importance || 'normal', preparation: exam?.preparation || '', notes: exam?.notes || '' });
   const [error, setError] = useState('');
   const set = (name) => (event) => setForm((current) => ({ ...current, [name]: event.target.value }));
-  if (!data.subjects.length) return <Modal title="Zuerst ein Fach hinzufügen" onClose={onClose}><EmptyState title="Ein Lernplan braucht ein Fach" description="Füge unter Profil → Fächer ein Fach hinzu. Danach kannst du die Prüfung planen." action={<Button onClick={onClose}>Verstanden</Button>} /></Modal>;
+  if (!data.subjects.length) return <Modal title="Zuerst ein Fach hinzufügen" onClose={onClose}><EmptyState title="Ein Lernplan braucht ein Fach" description="Füge unter Zukunft → Mein Profil → Fächer ein Fach hinzu. Danach kannst du die Prüfung planen." action={<Button onClick={onClose}>Verstanden</Button>} /></Modal>;
   function submit(event) {
     event.preventDefault();
     if (!form.subjectId || !form.title.trim() || !form.date) { setError('Wähle ein Fach, einen Titel und das tatsächliche Prüfungsdatum.'); return; }
@@ -154,7 +154,7 @@ function ActivityForm({ activity, today, onSave, onClose }) {
   </form></Modal>;
 }
 
-export default function Plan({ onPractice, data, today, onChange, notify, onSelectDay, onOpenProfile, initialView = 'week', initialPathway, onOpenSchoolImport, onOpenTask }) {
+export default function Plan({ onPractice, data, today, onChange, notify, onSelectDay, onOpenProfile, initialView = 'week', initialPathway, onOpenSchoolImport, onOpenTask, embedded = false, onViewChange }) {
   const [tab, setTab] = useState(initialView);
   const [week, setWeek] = useState(startOfWeek(today));
   const [selectedDay, setSelectedDay] = useState(today);
@@ -166,6 +166,7 @@ export default function Plan({ onPractice, data, today, onChange, notify, onSele
   const [overrideDate, setOverrideDate] = useState(today);
   const [overrideMinutes, setOverrideMinutes] = useState('');
   useEffect(() => { setTab(initialView); }, [initialView]);
+  useEffect(() => { if (embedded) onViewChange?.(tab); }, [tab, embedded, onViewChange]);
   useEffect(() => { if (initialPathway) setCountry(initialPathway); }, [initialPathway]);
   const exams = [...data.exams].sort((a, b) => a.date.localeCompare(b.date));
   const importedExamCount = exams.filter(exam => exam.importKey?.startsWith(`${SCHOOL_IMPORT_ID}-exam-`)).length;
@@ -208,8 +209,8 @@ export default function Plan({ onPractice, data, today, onChange, notify, onSele
   }
 
   return <div className="screen plan-screen">
-    <header className="page-header"><p className="page-kicker">DEINE NÄCHSTEN SCHRITTE</p><h1 className="page-title">Lernplan</h1></header>
-    <div className="tabs-scroll"><Segmented value={tab} onChange={setTab} options={[{ value: 'week', label: 'Woche' }, { value: 'timetable', label: 'Stundenplan' }, { value: 'exams', label: 'Prüfungen' }, { value: 'events', label: 'Termine' }, { value: 'roadmap', label: 'Studienweg' }, { value: 'schedule', label: 'Lernzeiten' }]} /></div>
+    {!embedded && <header className="page-header"><p className="page-kicker">DEINE NÄCHSTEN SCHRITTE</p><h1 className="page-title">Lernplan</h1></header>}
+    {!embedded && <div className="tabs-scroll"><Segmented value={tab} onChange={setTab} options={[{ value: 'week', label: 'Woche' }, { value: 'timetable', label: 'Stundenplan' }, { value: 'exams', label: 'Prüfungen' }, { value: 'events', label: 'Termine' }, { value: 'roadmap', label: 'Studienweg' }, { value: 'schedule', label: 'Lernzeiten' }]} /></div>}
 
     {tab === 'week' && <div className="stack">
       <div className="week-heading row"><button className="icon-button" aria-label="Vorherige Woche" onClick={() => changeWeek(-1)}><ChevronLeft size={20} /></button><h2>{formatDate(week, DATE_OPTIONS)} – {formatDate(shiftDate(week, 6), DATE_OPTIONS)}</h2><button className="icon-button" aria-label="Nächste Woche" onClick={() => changeWeek(1)}><ChevronRight size={20} /></button></div>

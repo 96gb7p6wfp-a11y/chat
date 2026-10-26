@@ -1,14 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowRight, CalendarDays, Check, Compass, Plus, Sun, TrendingUp, UserRound } from 'lucide-react';
+import { ArrowRight, CalendarDays, Check, Compass, Plus, Sun, BookOpen, GraduationCap } from 'lucide-react';
 import { addTask, ensureDailyPlan, getDailyPlan, localDateKey, normalizeData, removeTask, saveSchedule, saveTaskNotes, saveTaskReview, shiftDate, skipTask, toggleTask, moveTask, editTask, replaceTask, startTopicPractice } from './coach.js';
 import Today from './components/Today.jsx';
 import GuidedLearning from './components/GuidedLearning.jsx';
 import { subjectLabel, categoryLabel } from './i18n.js';
 import { loadData, MAX_BACKUP_BYTES, parseBackup, saveData, serializeBackup, STORAGE_KEY } from './storage.js';
-import Plan from './components/Plan.jsx';
-import Progress from './components/Progress.jsx';
-import Profile from './components/Profile.jsx';
+import LearningHub from './components/LearningHub.jsx';
+import FutureHub from './components/FutureHub.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import SchoolImport from './components/SchoolImport.jsx';
 import { StudyDialog, StudyDock, StudyLauncher, StudySaved } from './components/StudyTimer.jsx';
@@ -20,8 +19,10 @@ import '@fontsource/dm-sans/latin-600.css';
 import '@fontsource/dm-sans/latin-700.css';
 import './styles.css';
 import './semantic.css';
+import './growth-shell.css';
+import { getCurrentLearningTopics } from './curriculum.js';
 
-const NAV = [{ id:'today', label:'Heute', icon:Sun }, { id:'plan', label:'Lernplan', icon:CalendarDays }, { id:'progress', label:'Fortschritt', icon:TrendingUp }, { id:'profile', label:'Profil', icon:UserRound }];
+const NAV = [{ id:'today', label:'Heute', icon:Sun }, { id:'learn', label:'Lernen', icon:BookOpen }, { id:'future', label:'Zukunft', icon:GraduationCap }];
 const goalLabel = task => task.linkedGoal || ({academics:'Stärkere Noten für das Abitur',language:'Sprachlich auf das Studium vorbereiten',university:'Bewerbungen gezielt vorbereiten',activity:'Ein belegbares Bewerbungsprofil aufbauen',review:'Deinen Weg zum Studium realistisch gestalten'}[task.category] || 'Dein Studienweg');
 function browserStorage() { try { return window.localStorage; } catch { return null; } }
 function safeResource(value) { try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
@@ -31,7 +32,7 @@ function storageWarning(message) {
   if (/preserved/i.test(message)) return 'Dein gespeicherter Plan konnte nicht gelesen werden. Das Original wurde gesichert; du kannst es herunterladen.';
   return 'Der Gerätespeicher ist nicht verfügbar. Sichere deine Daten, bevor du die App schließt.';
 }
-function activeTab() { const hash = location.hash.slice(1); return NAV.some(item => item.id === hash) ? hash : hash === 'pathway' ? 'plan' : 'today'; }
+function activeTab() { const hash = location.hash.slice(1); return NAV.some(item => item.id === hash) ? hash : ['plan','progress'].includes(hash) ? 'learn' : ['profile','pathway'].includes(hash) ? 'future' : 'today'; }
 function downloadOriginal(key = STORAGE_KEY) {
   const original = browserStorage()?.getItem(key);
   if (!original) return;
@@ -57,9 +58,12 @@ function App() {
   const [boot] = useState(() => loadData(browserStorage(), today));
   const [data, setData] = useState(() => ensureDailyPlan(boot.data, today));
   const [tab, setTab] = useState(activeTab);
+  const [routeEpoch,setRouteEpoch] = useState(0);
   const [profileSection, setProfileSection] = useState('Goals');
   const [progressSubjectId, setProgressSubjectId] = useState('');
-  const [planView, setPlanView] = useState('week');
+  const [planView, setPlanView] = useState(location.hash === '#progress' ? 'grades' : location.hash === '#plan' ? 'week' : 'overview');
+  const [futureView, setFutureView] = useState(location.hash === '#profile' ? 'profile' : location.hash === '#pathway' ? 'roadmap' : 'overview');
+  const [futureTest, setFutureTest] = useState('sat');
   const [planPathway, setPlanPathway] = useState(null);
   const [selectedDay, setSelectedDay] = useState(today);
   const previousToday = useRef(today);
@@ -83,11 +87,23 @@ function App() {
 
   function notify(message) { setToast(message); }
   function update(updater) { setData(current => ensureDailyPlan(typeof updater === 'function' ? updater(current) : updater,selectedDay,today)); }
-  function navigate(next) { if (next !== 'progress') setProgressSubjectId(''); setTab(next); location.hash = next; window.scrollTo({top:0,behavior:'instant'}); }
+  function navigate(next) { let target=next; if(next==='progress'){setPlanView('grades');target='learn';} else if(next==='plan'){target='learn';} else if(next==='profile'){target='future';} if(target!=='learn')setProgressSubjectId(''); setTab(target);location.hash=target;window.scrollTo({top:0,behavior:'instant'}); }
+  function mainNavigate(next) { setRouteEpoch(value=>value+1); if(next==='today'){setSelectedDay(today);setData(current=>ensureDailyPlan(current,today));} if(next==='learn'){setPlanView('overview');setProgressSubjectId('');} if(next==='future')setFutureView('overview');navigate(next); }
+  function openFuture(view='overview'){setFutureView(view);navigate('future');}
   function openProgress(subjectId = '') { setProgressSubjectId(data.subjects.some(subject => subject.id === subjectId) ? subjectId : ''); navigate('progress'); }
   function practiceTopic(topic) {
     try { const next = startTopicPractice(data, topic, today); setData(next.state); setSelectedDay(today); navigate('today'); setModal({ type: 'task', id: next.task.id }); }
     catch (error) { notify(error.message || 'Dieses Thema konnte noch nicht eingeplant werden.'); }
+  }
+  function learnSubject(subjectId) {
+    const existing=getDailyPlan(data,today,today).tasks.find(task=>task.subjectId===subjectId&&!task.completed&&!task.ieltsSkill&&!task.satSkill);
+    if(existing){setSelectedDay(today);navigate('today');setModal({type:'task',id:existing.id});return;}
+    const selected=getCurrentLearningTopics(data,subjectId)[0];
+    practiceTopic(selected || {id:`choose-${subjectId}`,subjectId,title:'Unterrichtsthema auswählen',learningTopic:'choose-topic'});
+  }
+  function applyUniversityAbiturTarget(target) {
+    update(current=>({...current,abiturTarget:{...current.abiturTarget,mode:'grade',targetGrade:target.grade}}));
+    setPlanView('abitur');setModal(null);navigate('learn');notify(target.referenceOnly ? 'Die Referenz ist als dein persönliches Abiturziel übernommen.' : 'Dein bestätigtes Hochschulziel ist als Abiturziel übernommen.');
   }
   function chooseDay(date) { setSelectedDay(date); setData(current => ensureDailyPlan(current,date,today)); navigate('today'); }
   function completeTask(task) { if (task.date > today) { notify('Künftige Aufgaben sind eine Vorschau. Schließe sie am jeweiligen Tag ab.'); return; } const now = new Date(); update(current => toggleTask(current.study?.active?.taskId === task.id ? finishStudy(current,now) : current,task.id,now)); if (!task.completed) notify('Geschafft. Dein Fortschritt ist gespeichert.'); }
@@ -101,11 +117,11 @@ function App() {
     event.target.value = '';
   }
   function restoreBackup() { const next = ensureDailyPlan(modal.data,today); const result = saveData(next,browserStorage()); if (!result.ok) { notify(result.error || 'Die Wiederherstellung konnte nicht gespeichert werden. Dein aktueller Plan bleibt erhalten.'); return; } setCanPersist(true); setData(next); setStorageMessage(''); setRecoveryNotice(''); setModal(null); setSetupOpen(false); notify('Sicherung wiederhergestellt.'); }
-  function showPlan(view = 'week') { setPlanView(typeof view === 'string' ? view : 'week');navigate('plan'); }
+  function showPlan(view = 'week') { const next=typeof view==='string'?view:'week'; if(next==='roadmap'){openFuture('roadmap');return;}setPlanView(next);setProgressSubjectId('');navigate('learn'); }
   function skipToday(task) { update(current => skipTask(current.study?.active?.taskId === task.id ? finishStudy(current,new Date()) : current,task.id));setModal(null);notify('Für heute ausgelassen. Dein Lernplan ist angepasst.'); }
-  function showLinkedGoal(task) { setPlanPathway(task.roadmapItemId?.startsWith('Germany-') ? 'Germany' : task.roadmapItemId?.startsWith('USA-') ? 'USA' : data.profile.pathways[0] || 'USA');setPlanView('roadmap');setModal(null);navigate('plan'); }
-  function showEvents() { setPlanView('events');setModal(null);navigate('plan'); }
-  function openProfile(section) { setProfileSection(section);setModal(null);navigate('profile'); }
+  function showLinkedGoal(task) { setPlanPathway(task.roadmapItemId?.startsWith('Germany-')?'Germany':'USA');setModal(null);openFuture('roadmap'); }
+  function showEvents() { setModal(null);showPlan('events'); }
+  function openProfile(section='Goals') { setProfileSection(section);setModal(null); if(['SAT','IELTS'].includes(section)){setFutureTest(section==='SAT'?'sat':'ielts');openFuture('tests');}else openFuture(section==='Settings'?'settings':section==='Activities'?'activities':section==='Universities'?'universities':'profile'); }
   function openFocus() { setModal({type:'focus'}); }
   function openFocusTask() { if (activeStudy && data.tasks.some(task => task.id === activeStudy.taskId)) setModal({type:'task',id:activeStudy.taskId}); else { setModal(null);notify('Deine erfasste Lernzeit bleibt auch erhalten, wenn eine Aufgabe entfernt wird.'); } }
   function beginFocus(task,minutes) {
@@ -128,21 +144,21 @@ function App() {
   }
 
   return <div className={`app-shell ${activeStudy ? 'has-active-study' : ''}`}>
-    <aside className="desktop-sidebar"><a className="brand" href="#today" onClick={() => navigate('today')}><Compass size={25} strokeWidth={1.6}/><span>Northstar</span></a><p className="sidebar-caption">Dein nächster guter Schritt.</p><nav aria-label="Hauptnavigation">{NAV.map(({id,label,icon:Icon}) => <button key={id} onClick={() => navigate(id)} aria-current={tab === id ? 'page' : undefined} className={`nav-item ${tab === id ? 'active' : ''}`}><Icon size={19}/>{label}</button>)}</nav><div className="sidebar-footer"><span className="sidebar-stage">{data.profile.schoolYear} · Hessen</span><p>Kleine Schritte.<br/>Mehr Möglichkeiten.</p><span className="local-caption">{storageMessage ? 'Sicherung empfohlen' : 'Auf diesem Gerät gespeichert'}</span></div></aside>
+    <aside className="desktop-sidebar"><a className="brand" href="#today" onClick={() => mainNavigate('today')}><Compass size={25} strokeWidth={1.6}/><span>Northstar</span></a><p className="sidebar-caption">Dein nächster guter Schritt.</p><nav aria-label="Hauptnavigation">{NAV.map(({id,label,icon:Icon}) => <button key={id} onClick={() => mainNavigate(id)} aria-current={tab === id ? 'page' : undefined} className={`nav-item ${tab === id ? 'active' : ''}`}><Icon size={19}/>{label}</button>)}</nav><div className="sidebar-footer"><span className="sidebar-stage">{data.profile.schoolYear} · Hessen</span><p>Kleine Schritte.<br/>Mehr Möglichkeiten.</p><span className="local-caption">{storageMessage ? 'Sicherung empfohlen' : 'Auf diesem Gerät gespeichert'}</span></div></aside>
     <main className="main-content" id="main-content">
-      <header className="mobile-brand"><a className="brand" href="#today" onClick={() => navigate('today')}><Compass size={21} strokeWidth={1.7}/><span>Northstar</span></a><span>{data.profile.schoolYear} · Abitur {data.profile.graduationYear}</span></header>
+      <header className="mobile-brand"><a className="brand" href="#today" onClick={() => mainNavigate('today')}><Compass size={21} strokeWidth={1.7}/><span>Northstar</span></a><span>{data.profile.schoolYear} · Abitur {data.profile.graduationYear}</span></header>
       {storageMessage && <div className="storage-notice" role="alert"><p>{storageMessage}</p><button onClick={exportData}>Sicherung exportieren</button>{boot.recoveryKey && <button onClick={() => downloadOriginal(boot.recoveryKey)}>Originaldaten herunterladen</button>}</div>}
       {data.demo && !setupOpen && <div className="demo-banner"><span>Beispielplan · eigene Angaben eintragen</span><button onClick={() => setSetupOpen(true)}>Einrichten <ArrowRight size={14}/></button></div>}
       {tab === 'today' && <Today data={data} today={today} date={selectedDay} plan={dailyPlan} onChange={update}
         onOpenTask={task => setModal({type:'task',id:task.id})} onComplete={completeTask}
         onTime={() => setModal({type:'time'})} onAdd={() => setModal({type:'addTask'})}
         onPlan={showPlan} onProgress={openProgress} onProfile={openProfile}
-        onPurpose={() => setModal({type:'purpose'})} onChooseDay={chooseDay}/>}
-      {tab === 'plan' && <Plan onPractice={practiceTopic} data={data} today={today} initialView={planView} initialPathway={planPathway || data.profile.pathways[0]} onChange={update} notify={notify} onSelectDay={chooseDay} onOpenProfile={openProfile} onOpenTask={task => setModal({type:'task',id:task.id})} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
-      {tab === 'progress' && <Progress onPractice={practiceTopic} key={progressSubjectId || 'overview'} initialSubjectId={progressSubjectId} data={data} today={today} onChange={update} notify={notify} onOpenPlan={showPlan} onOpenProfile={openProfile} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
-      {tab === 'profile' && <Profile key={profileSection} initialSection={profileSection} data={data} today={today} onChange={update} notify={notify} onRestartSetup={() => setSetupOpen(true)} onExport={exportData} onImport={() => importRef.current?.click()} onOpenSchedule={() => showPlan('schedule')} onOpenProgress={() => openProgress()} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
+        onFuture={openFuture} onPurpose={() => setModal({type:'purpose'})} onChooseDay={chooseDay}/>}
+      {tab === 'learn' && <LearningHub onOpenFuture={openFuture} key={`${planView}-${progressSubjectId}-${routeEpoch}`} data={data} today={today} initialView={planView} initialSubjectId={progressSubjectId} onChange={update} notify={notify} onPractice={practiceTopic} onSelectDay={chooseDay} onOpenProfile={openProfile} onOpenTask={task=>setModal({type:'task',id:task.id})} onOpenSchoolImport={(section='overview')=>setModal({type:'schoolImport',section})}/>}
+      {tab === 'future' && <FutureHub key={`${futureView}-${profileSection}-${futureTest}-${routeEpoch}`} initialView={futureView} initialSection={profileSection} initialTest={futureTest} initialPathway={planPathway||data.profile.pathways[0]} data={data} today={today} onChange={update} notify={notify} onLearn={learnSubject} onApplyAbiturTarget={applyUniversityAbiturTarget} onPractice={practiceTopic} onSelectDay={chooseDay} onOpenTask={task=>setModal({type:'task',id:task.id})} onOpenProfile={openProfile} onOpenProgress={openProgress} onOpenSchedule={()=>showPlan('schedule')} onOpenSchoolImport={(section='overview')=>setModal({type:'schoolImport',section})} onRestartSetup={()=>setSetupOpen(true)} onExport={exportData} onImport={()=>importRef.current?.click()}/>}
+
     </main>
-    <nav className="bottom-nav" aria-label="Hauptnavigation mobil">{NAV.map(({id,label,icon:Icon}) => <button key={id} onClick={() => navigate(id)} aria-current={tab === id ? 'page' : undefined} className={tab === id ? 'active' : ''}><Icon size={22} strokeWidth={tab === id ? 2 : 1.6}/><span>{label}</span></button>)}</nav>
+    <nav className="bottom-nav" aria-label="Hauptnavigation mobil">{NAV.map(({id,label,icon:Icon}) => <button key={id} onClick={() => mainNavigate(id)} aria-current={tab === id ? 'page' : undefined} className={tab === id ? 'active' : ''}><Icon size={22} strokeWidth={tab === id ? 2 : 1.6}/><span>{label}</span></button>)}</nav>
     <input type="file" ref={importRef} accept="application/json,.json" aria-label="Northstar-Sicherung importieren" className="visually-hidden" onChange={importData}/>
     {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}
     {setupOpen && <Onboarding data={data} today={today} onFinish={finishSetup} onClose={() => { if (!data.onboardingCompleted) update(current => ({...current,onboardingCompleted:true})); setSetupOpen(false); }}/>}

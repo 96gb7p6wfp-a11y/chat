@@ -1,0 +1,11 @@
+/* Final shell rules: ordinary navigation wraps rather than creating carousels. */
+.bottom-nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+.tabs-scroll{overflow:visible;flex-wrap:wrap;gap:8px}
+.tabs-scroll .segmented{width:100%;min-width:0;flex-wrap:wrap}
+.tabs-scroll .segmented>button,.tabs-scroll>button{white-space:normal;min-width:0;flex:1 1 6rem;overflow-wrap:anywhere}
+.week-strip{grid-template-columns:repeat(auto-fit,minmax(min(100%,4rem),1fr));overflow:visible}
+.week-strip>button{min-width:0;min-height:44px}
+.segmented{flex-wrap:wrap;min-width:0}
+.segmented>button{white-space:normal;min-width:0;overflow-wrap:anywhere}
+.hub-detail-header,.hub-list,.action-home,.growth-hub{min-width:0}
+.hub-row,.destination-link,.next-deadline{max-width:100%}

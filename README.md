@@ -1,173 +1,145 @@
 # Northstar
 
-An iPhone-first academic and university preparation coach, built as a local
-React PWA. **Heute** explains your academic situation, the most useful next
-step, and how to carry it out. Four primary screens keep daily learning,
-school planning, progress and university preparation together.
+An iPhone-first academic and university growth coach, built as a local React
+PWA. Three primary areas turn goals and actual evidence into a realistic next
+action: **Heute**, **Lernen**, **Zukunft**.
 
-The starting context is a Gymnasium in Hessen, Q1, Mathematics and Physics
-Leistungskurse, Abitur 2028, and USA/Germany pathways. All values are editable.
-A new profile does **not** prefill historical grades as current results:
-current grades, overall target average, test scores, examination dates,
-school lessons and exact volleyball hours remain unknown until entered.
-Tuesday/Friday evening volleyball is noted without inventing clock times.
-Existing saved profiles keep their actual grades, timetable and history.
+The editable starting context is Gymnasium in Hessen, Q1, Mathematics and Physics
+Leistungskurse and Abitur 2028. A new installation does not invent current grades,
+exam results, IELTS/SAT scores, school lessons or exact volleyball times. Existing
+saved grades, timetable entries, achievements and task history remain intact.
 
 ## The experience
 
-- **Heute:** a compact charcoal mission, one academic priority, a distinct next-exam
-  countdown and grade-improvement opportunity, then three actionable task rows.
-  Unfinished work comes first. More tasks, history and daily context remain
-  available behind disclosures. Subject averages and target calculations live
-  in Fortschritt; tapping an improvement opportunity opens that subject directly.
-- **Lernplan:** weekly priorities, school lessons, study allowances and fixed
-  commitments, exams, a shared deadlines timeline and separate USA/Germany
-  university roadmaps. Lessons support rooms, teachers and alternating A/B
-  weeks. Entering an exam creates an adaptive preparation sequence.
-- **Fortschritt:** fast grade entry, editable assessment history, semester
-  comparisons, transparent averages and future-grade scenarios. Weekly
-  completion, estimated task time, separately measured focus time, reviews,
-  IELTS evidence, exam preparation and roadmap progress remain available.
-- **Profil:** academic background, goals, subjects, university shortlist,
-  activities, projects and work experience, evidence and specific next
-  development actions. IELTS and SAT share a secondary preparation section.
-  Study windows, commitments, theme and portable JSON backups are editable here.
+- **Heute:** one destination and primary action, the next saved examination or
+  verified university deadline, two further tasks and a small completion bar.
+  Additional tasks, daily history, availability and review stay behind
+  **Tagesplan & Verlauf**.
+- **Lernen:** a vertical menu for weekly planning, daily/weekly school lessons,
+  examinations, grades, backward Abitur planning and current topics.
+  **Rückblick & Organisation** contains weekly review, other deadlines and study
+  allowances. Lessons, exams and commitments share one time budget.
+- **Zukunft:** programme-specific university goals, IELTS/SAT journeys,
+  application roadmaps, activities, projects and personal background. The gear
+  opens settings and JSON backup/restore. Existing university notes and profile
+  editors remain accessible without adding bottom-navigation tabs.
 
-Four optional setup steps create a first plan without requiring every field.
-Blank grades and missing examination dates stay blank. The initial study
-allowances and windows are editable planning preferences, not a claim about
-known school hours or actual free time.
+Four optional onboarding steps create the first plan. All setup can be edited
+later. Initial study allowances are editable planning preferences, not a claim
+about known school hours or actual free time.
 
-## Review your Q1 documents
+## University goals and reliable requirements
 
-Open **Profil → Deine Q1-Unterlagen**, or **Lernplan → Prüfungen / Stundenplan →
-Import prüfen**. The supplied 2026/2027 document pack contains only the nine
-personally confirmed examinations and 19 extracted timetable blocks. Review and
-correct the timetable before saving. Double periods, course codes, teacher
-abbreviations and rooms remain editable. The Tuesday sport room stays unknown.
+Choose UCL, UCLA, UC Berkeley or a custom university, programme, country, entry
+year and priority. UCL and UCLA are separate institutions. Multiple UK, US and
+German goals can remain active together.
 
-Imports merge by stable provenance and existing subject/date or lesson identity;
-repeating them preserves later corrections. Overlaps are flagged instead of
-silently replacing lessons. The exam review explicitly controls whether imported
-exam subjects are enabled for planning. No exam topics, times or rooms are invented.
-The supplied German 4/15 result is an unconfirmed grade-entry draft until its
-assessment type, date and weight have been supplied. It is not a final course grade.
+Requirements retain an official source URL, institution, programme, entry year,
+source reference year, verification date and confirmed/provisional/unpublished
+status. Manual verification also requires a concrete source note. An older
+entry year's rule does not silently become a confirmed 2028 requirement.
 
-## Hessen 2028 scenarios and post-exam recovery
+The comparison distinguishes unknown information, missing evidence and actual
+recorded results. A starting estimate or individual school exam is not accepted
+as a confirmed semester result. Verified subject requirements can influence
+planning; adopting a verified university Abitur target requires an explicit
+button and never overwrites existing grades. Programme-specific roadmaps sit
+above the retained general USA/Germany planning routes.
 
-Open **Fortschritt → Mein Abitur 2028** for separate semester results and selected
-Block I/II scenarios. Course-hour assessment plans, explicit classroom-performance
-scenarios, current Q1/Q2 topic selection and post-exam recovery are integrated
-with the same daily study allowance. See [the implementation and source status](docs/hessen-2028.md).
+Official UCL, UCLA, Berkeley, College Board and British Council pages were
+retrieved on 26 October 2026. Read-only, sourced references distinguish UCL's
+published 2027 Computer Science requirements from unconfirmed 2028 requirements.
+Published SAT dates are compared with school exams; choosing one creates only a
+personal planned date. Current international SAT fees and provider guidance are
+cited; IELTS prices and seats remain unverified. Saved requirements are never
+overwritten by a reference update. See [university sources](docs/university-sources.md)
+and [provider sources](docs/test-provider-sources.md). Meeting a minimum does not
+guarantee admission; the app does not calculate admissions probabilities.
 
-**Official verification remains incomplete:** the managed network blocks the
-mandatory Hessen sources. The supplied topic fields and general count rules are
-labelled provisional. This release cannot certify official course inclusion,
-examination eligibility or passing, and does not claim the complete ten-subject
-official Q1/Q2 catalogue or verified 2028 examination dates.
+See [the growth-coach model and limitations](docs/growth-coach.md).
 
-## Academic intelligence
+## Grades, Abitur and recovery
 
-Grades use the German upper-secondary **0–15 point** scale; zero is valid.
-Each assessment can include its category, date, Q1–Q4 semester, note and
-explicit relative weight. Supported categories are written assessments,
-oral results, participation, presentations and other work.
+**Lernen → Noten** supports 0–15 points, written/oral/participation/presentation
+and other assessments, dates, Q1–Q4, notes and explicit weighting. Zero is valid.
+Simple, individual-weighted and category-weighted means remain distinct. Missing
+weights keep a weighted calculation open. An undated starting estimate is
+labelled and is not converted into an assessment.
 
-Choose the calculation for each subject:
+Subject details calculate the minimum next result or required average across
+remaining assessments when the selected data and assumptions are sufficient.
+Scenarios expose written/oral contributions, best achievable outcomes and
+impossible targets. Hypothetical results never become actual grades.
 
-- **Simple mean:** all recorded assessments count equally.
-- **Individual weights:** every assessment needs an explicit weight.
-- **Category weights:** category means receive the weights you enter;
-  results within each category count equally. Missing categories or
-  unconfigured weights keep the weighted result open rather than silently
-  changing the rule.
+**Lernen → Abiturziel** works backward from a target grade or total points using
+selected 8 LK semester results weighted twice, 24 GK results weighted once and
+five examinations weighted fourfold. Confirmed results stay fixed; Q1–Q4,
+subject targets and reversible what-if overrides show alternative outcomes.
+The official OAVO Annex 10b conversion and published 2028 written examination
+schedule have been checked against current official sources. Arithmetic does
+not certify that a particular course selection is legally eligible or passed:
+attendance, missing course metadata and special cases still require school
+confirmation. See [Hessen source status](docs/hessen-2028.md).
 
-Course weights for the overall average are also editable. An LK is not
-silently counted twice. These are transparent course estimates, **not an
-official Hessen course or final Abitur calculation**.
+After an exam, record how it went without inventing a grade. Add the returned
+result only with its actual date, category, semester and explicit weight, or
+link an existing matching record. English/German diagnostics use actual
+questions and self-check criteria to choose practice. Teacher comments and
+later comparable results inform recovery. A poor score alone does not establish
+the cause of a weakness or prove that a particular study method works.
 
-Assigned assessments default to the current school semester. Q1 results are
-not presented as Q2 performance when Q2 is still empty. Older unassigned
-records and original undated starting values remain available as clearly
-labelled orientation; they are not invented assessments or silently mixed
-with dated results.
+## Interactive learning and shared planning
 
-Subject details immediately show **the minimum next score**, target, current
-calculated average and next saved exam. Configure the remaining assessments and
-actual weighting once; the hypothetical setup persists by semester. An undated
-starting estimate never supplies fictional assessment data. Missing records,
-weights or later-result assumptions keep the answer open.
+Starting a learning task opens an actual question and answer input. Short
+explanations, solutions, checking criteria and a second attempt remain close to
+the question. Draft answers, progress and mistakes persist independently of
+older task notes. Known topics select relevant authored material. A missing
+topic prompts a choice; unsupported content is explicitly marked incomplete.
 
-Choose the next unknown result or the mean required across remaining unknown
-results. Detailed arithmetic, best-case outcomes and a user-entered comparison
-stay expandable. Requirements above 15 are explicitly impossible under those
-assumptions. Future scenarios never become actual grades or change study priorities.
+Original modules cover English, German, Mathematics, Physics and selected
+IELTS/SAT skills. This is not a complete official curriculum or automatic essay
+grading. Written answers use model solutions and self-check criteria, not
+invented school grades or IELTS bands. Synthetic listening practice is labelled;
+without a suitable device voice, the listening assessment remains open.
 
-An explainable priority engine combines actual target gaps, approaching
-assessments and deadlines, LK study importance, recent results, practice
-history, difficulty, personal preferences and available time. Manual subject
-priorities can override the normal emphasis. A grade or timetable change
-updates the plan without deleting saved work or rewriting previous days.
+The priority engine combines real performance, target gaps, imminent exams,
+LK importance, university relevance, practice history and manual priorities.
+School lessons and fixed commitments reduce usable study windows. Completing,
+skipping, changing a deadline or entering a grade recalculates the plan while
+preserving started work and historical records.
 
-## Interactive learning
+## IELTS and SAT journeys
 
-Opening a task initially shows its topic, duration and first actual exercise.
-**Lernen starten** opens a sequence: short explanation → one question at a time →
-model answer and checking criteria → a second attempt on uncertain questions →
-a saved mistake and completion. Answers and position autosave independently of
-older notes. Reviewing or changing priorities does not discard started work.
-Existing reflections remain accessible in a collapsed history.
+In **Zukunft → IELTS & SAT**, move through need → assessment → preparation →
+registration. SAT is not automatically recommended for prestige. Current UC
+non-use of SAT/ACT is distinguished from yet-unverified 2028 programme rules;
+a deliberate personal preparation override remains available.
 
-Twenty-five authored modules cover four English topics (including Brown v. Board
-of Education), seven English recovery/diagnostic units, three Mathematics topics,
-three German writing/interpretation tasks with original practice texts, two
-Physics topics, all four IELTS skills, and two SAT skills. Each has
-actual questions, solutions, explanations and a review. Short sessions reduce
-quantity; they do not falsely claim a full exam. IELTS Listening uses a device
-English speech voice, is labelled synthetic practice, and explains when audio is
-unavailable. Full digital SAT simulations continue in official Bluebook material.
+Short original diagnostics identify exercise domains without awarding an
+SAT score or IELTS band. Enter real Bluebook/mock/official results separately.
+Complete actual official results take priority as a planning baseline; conflicting
+section and total scores leave the gap open. Preparation hours are an explicit
+user-selected scenario, not a promised score-gain formula. The app converts that
+scenario into weeks/minutes within the shared timetable-aware budget.
 
-Known examination topics guide selection. Missing topics require a simple choice;
-unsupported topics explicitly say the interactive lesson is incomplete. The app
-does not silently substitute unrelated exercises, invent textbook pages or claim
-coverage of the complete Hessen curriculum. Extra resources remain optional.
+Official registration, practice, test-centre, device and identification resources
+are linked. User-entered official provider dates can be compared with school
+exams and selected as a planned date. No booking, fee or free seat is claimed.
+School examinations reduce test workload; full Bluebook simulations require a
+sufficient uninterrupted block. At most one automatically generated standardized-
+test task is added to a daily plan.
 
-Self-checks are **not automatic correction, school marks or IELTS bands**.
-Mistakes schedule earlier reviews of the same module and prioritize uncertain
-questions. Repeated difficulty can prompt targeted teacher feedback. No paid AI
-API, sign-in or admissions prediction is required.
+## Review the supplied Q1 documents
 
-## University preparation
+Open **Zukunft → Mein Profil → Deine Q1-Unterlagen**, or
+**Lernen → Prüfungen / Stundenplan → Import prüfen**. The supplied document pack
+contains only the nine personally confirmed 2026 examinations and 19 extracted
+timetable blocks. Review and correct the timetable before saving. Double periods,
+course names, room and teacher abbreviations remain editable. The Tuesday sport
+room remains unknown. Imports merge idempotently and preserve later corrections.
 
-USA and Germany retain distinct long-term roadmaps and year → semester →
-month → week → daily links. Estimated planning phases and actual user-entered
-deadlines are distinguished. Requirements and institutional dates need
-checking against the relevant official programme source.
-
-The application profile separates plans, self-reported experience and
-records **you have supported with evidence**. Store real responsibilities,
-dates, hours, achievements, impact, repository/project links and evidence
-notes. This is documentation quality, not external verification, an
-admissions probability or an unsupported profile-strength percentage.
-Recommendations favour documenting existing contributions and protecting
-academic priorities over continually adding extracurricular commitments.
-
-## Coordinated IELTS and SAT preparation
-
-Both test coaches support editable goals, planned versus personally booked dates,
-mock/official/self-assessed results, skill-specific errors, guided practice and
-conditional preparation windows. Date-derived milestones are planning proposals,
-not bookable provider dates. All school, test and profile work draws from the same
-daily allowance; at most one standardized-test action is generated each day.
-School examinations reduce test practice to short maintenance sessions. A full
-SAT Bluebook simulation requires an uninterrupted 144-minute block including its
-break; it is never squeezed into a shortened full-test claim.
-
-Official registration and practice resources are linked. Live retrieval of the
-provider pages was blocked by this environment's network policy, so the app does
-not quote unverified current fees, available test dates, places or document rules.
-UCLA and UC Berkeley SAT relevance is distinguished from other university targets;
-check the official policy for the actual application year.
+The supplied German 4/15 assessment stays an unconfirmed entry draft until the
+missing type, date and weight are supplied. It is not a confirmed semester grade.
 
 ## Run and verify
 
@@ -177,18 +149,13 @@ Use Node.js 24 from the repository root:
 npm ci --no-audit --no-fund
 npm test
 npm run build
-npm run dev -- --port 5173 --strictPort
-```
-
-To test the production app, run this in one terminal:
-
-```sh
 npm run preview -- --port 4176 --strictPort
 ```
 
-Then run the current browser suite in another terminal:
+With the production preview running, execute browser checks:
 
 ```sh
+python3 tests/growth_coach_browser.py --url http://127.0.0.1:4176
 python3 tests/coach_upgrade_browser.py --url http://127.0.0.1:4176
 python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
 python3 tests/personal_tutor_browser.py --url http://127.0.0.1:4176
@@ -196,47 +163,37 @@ python3 tests/hessen_browser.py --url http://127.0.0.1:4176
 python3 tests/responsive_browser.py --url http://127.0.0.1:4176
 ```
 
-The browser suite needs Python Playwright and `/usr/bin/chromium`. It covers
-onboarding, grades and scenarios, planning, A/B lessons, exams, IELTS,
-evidence, guided learning, tasks, reviews, backup/recovery, phone layouts,
-large text, themes, keyboard-height changes and the production offline shell.
-It writes results and screenshots to ignored `test-results/coach-upgrade/`.
-Use `--case NAME` for a targeted case; the script includes its prerequisites.
-The original `tests/browser_smoke.py --url … --production` entry point forwards
-to this maintained German-interface suite. There are no separate lint or
-type-check scripts in this JavaScript project.
-See [the implementation model](docs/coaching-engine.md) and
-[the device QA checklist](docs/academic-coach-qa.md).
+The suites use Python Playwright and `/usr/bin/chromium`. They exercise the new
+university/SAT/Abitur/recovery journeys and retained onboarding, grade, task,
+timetable, import and storage flows. Responsive checks include narrow phones,
+light/dark mode and enlarged text. Screenshots and results go to ignored
+`test-results/`. `npm run dev -- --port 5173 --strictPort` starts development.
+There are no separate lint or type-check scripts in this JavaScript project.
 
 ## Data, offline use and deployment
 
-User data stays in local browser storage without an account or paid API.
-Existing records migrate safely; malformed data is preserved for recovery,
-and invalid imports do not replace the current plan. Export a JSON backup
-before clearing browser data, changing devices or changing the app's origin.
-An update on the same origin retains browser data; asset caching is separate
-from personal records.
+Data stays under the existing `northstar.coach.v2` local-storage key and schema
+version 2. New goal, diagnostic and scenario fields are additive. Malformed
+saved data is retained for recovery; invalid imports cannot silently replace
+records. Export a JSON backup before clearing browser storage, switching devices
+or changing the origin. Same-origin updates retain personal records; service-
+worker assets are cached separately.
 
-The production PWA includes self-hosted fonts, dark/light/device themes,
-safe-area spacing and an offline shell. Visit online once before relying on
-offline use. Stable vendor assets are split for caching. Service-worker and
-layout checks in Chromium do not replace a real iPhone Safari/Home Screen
-test.
+Self-hosted fonts, themes, safe areas and the offline shell remain supported.
+Visit online once before relying on offline use. Chromium tests cannot replace
+physical iPhone Safari and Home Screen testing.
 
-The existing GitHub Pages Actions workflow is unchanged. After reviewing the
-upgrade, committing and pushing app changes to `main` triggers it. GitHub
-Pages must use **Source: GitHub Actions**. The workflow installs dependencies,
-runs unit tests, builds with the configured Pages base path and publishes
-`dist/`. This upgrade has not been published merely by building or previewing
-it. For a manual project-path build, use:
+The existing GitHub Pages Actions workflow and site configuration are unchanged.
+A reviewed commit pushed to `main` triggers its tests, project-path build and
+publication. Verify the workflow and public version before claiming deployment.
+The project-path build is:
 
 ```sh
 NORTHSTAR_BASE_PATH=/chat/ npm run build
 ```
 
-An official Abitur eligibility/final-grade calculator, admissions prediction,
-automatic essay correction, account sync, calendar import/export and
-cross-app Screen Time restrictions are not implemented. The web app cannot
-monitor or block TikTok, Instagram or Snapchat. `native/` retains the earlier
-independent SwiftUI experiment; this coaching upgrade has not been ported to
-it. Physical-iPhone Safari and Home Screen testing still need a real device.
+Account sync, automatic official essay grading, a complete ten-subject official
+Q1/Q2 content catalogue, calendar import/export and cross-app Screen Time controls
+remain outside the completed functionality. The PWA cannot monitor or block
+TikTok, Instagram or Snapchat. The independent older SwiftUI experiment remains
+in `native/`.

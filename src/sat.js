@@ -1,4 +1,4 @@
-import { TEST_SOURCES, getPreparationContext, getPreparationHorizon, getPreparationMilestones, preparationDay, validPreparationDate } from './test-preparation.js';
+import { TEST_SOURCES, getInformalPracticeNeeds, getPreparationContext, getPreparationHorizon, getPreparationMilestones, preparationDay, validPreparationDate } from './test-preparation.js';
 
 export const SAT_SKILLS = ['readingWriting', 'math'];
 export const SAT_LABELS = { readingWriting: 'Reading and Writing', math: 'Mathematics', full: 'Bluebook-Probetest' };
@@ -95,12 +95,13 @@ export function getSATCandidates(state, today) {
   if (!data.enabled || !summary.configured || !validPreparationDate(today) || (daysUntil !== null && daysUntil < 0) || context.remaining < 10) return [];
   const minutes = Math.min(context.remaining, context.schoolCap, daysUntil !== null && daysUntil <= 1 ? 15 : daysUntil !== null && daysUntil <= 28 ? 45 : 30);
   const completed = context.completed;
+  const informal = getInformalPracticeNeeds(state, 'sat', today);
   const candidates = summary.sections.map((section, index) => {
     const last = completed.filter(task => task.satSkill === section.skill).map(task => task.date).sort().at(-1);
     const ago = last ? preparationDay(today) - preparationDay(last) : null;
     const practice = getSATPractice(section.skill, { days: daysUntil, minutes, mistakes: section.mistakes });
     const reason = section.gap > 0 ? `${section.label}: ${section.current} (${section.source === 'official' ? 'offiziell' : section.source === 'mock' ? 'Probeprüfung' : 'selbst eingeschätzt'}) → Ziel ${section.target}.` : section.current === null ? `Für ${section.label} fehlt noch eine ausgewertete Diagnose.` : `Festige ${section.label} anhand deiner letzten Fehler.`;
-    return { key: `sat-${section.skill}`, category: 'Language', satSkill: section.skill, title: practice.title, minutes, score: 40 + Math.min(24, (section.gap || 0) / 10) + (daysUntil !== null && daysUntil <= 21 ? 14 : 0) + (section.current === null ? 3 : 0) - (ago === null ? 0 : ago === 0 ? 30 : ago <= 2 ? 20 : ago <= 4 ? 8 : 0) - index * .01, reason: `${reason}${daysUntil !== null ? ` ${data.dateStatus === 'booked' ? 'Gebuchte Prüfung' : 'Geplanter Termin'} ${daysUntil === 0 ? 'heute' : `in ${daysUntil} Tagen`}.` : ''} ${context.reason}`, ...practice, goalId: 'tests' };
+    return { key: `sat-${section.skill}`, category: 'Language', satSkill: section.skill, title: practice.title, minutes, score: 40 + (!section.evidenceCount && informal.some(item => item.skill === section.skill) ? 9 : 0) + Math.min(24, (section.gap || 0) / 10) + (daysUntil !== null && daysUntil <= 21 ? 14 : 0) + (section.current === null ? 3 : 0) - (ago === null ? 0 : ago === 0 ? 30 : ago <= 2 ? 20 : ago <= 4 ? 8 : 0) - index * .01, reason: `${reason}${!section.evidenceCount && informal.some(item => item.skill === section.skill) ? ' Deine Kurzdiagnose zeigt hier Übungsbedarf; sie ist kein Score.' : ''}${daysUntil !== null ? ` ${data.dateStatus === 'booked' ? 'Gebuchte Prüfung' : 'Geplanter Termin'} ${daysUntil === 0 ? 'heute' : `in ${daysUntil} Tagen`}.` : ''} ${context.reason}`, ...practice, goalId: 'tests' };
   });
   const lastMock = summary.scores.find(score => score.source === 'mock' && calculateSATTotal(score.skills) !== null);
   const dailyBudget = (state.schedule?.timeOverrides || []).find(item => item.date === today)?.minutes ?? (state.schedule?.weekly || []).find(item => Number(item.day) === new Date(`${today}T12:00:00Z`).getUTCDay())?.minutes ?? 0;

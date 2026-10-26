@@ -4,6 +4,9 @@ import { normalizeHessen } from './hessen.js';
 import { normalizeCurriculum } from './curriculum.js';
 import { normalizeRecovery } from './recovery.js';
 import { normalizeSemesterGrading } from './semester-grades.js';
+import { normalizeUniversityGoals } from './university-goals.js';
+import { normalizeTestJourney } from './test-journeys.js';
+import { normalizeAbiturTarget } from './abitur-target.js';
 
 export const STORAGE_KEY = 'northstar.coach.v2';
 export const LEGACY_KEY = 'northstar.data.v1';
@@ -353,7 +356,7 @@ function validateCurrent(value) {
   validateLearning(value.learning);
   // Reject invalid additive data before a restore can silently discard records.
   // Older backups omit these fields and migrate without altering existing data.
-  for (const [key, normalize] of [['hessen', normalizeHessen], ['curriculum', normalizeCurriculum], ['recovery', normalizeRecovery], ['semesterGrading', normalizeSemesterGrading]]) {
+  for (const [key, normalize] of [['hessen', normalizeHessen], ['curriculum', normalizeCurriculum], ['recovery', normalizeRecovery], ['semesterGrading', normalizeSemesterGrading], ['universityGoals', normalizeUniversityGoals], ['testJourney', normalizeTestJourney], ['abiturTarget', normalizeAbiturTarget]]) {
     if (value[key] === undefined) continue;
     if (!object(value[key])) fail(`${key} must contain an object.`);
     assertNewDataRetained(value[key], normalize(value[key]), key);
@@ -617,7 +620,7 @@ function assertRetained(source, normalized, legacy = false) {
   if (!legacy) {
     // Additive v2 data must survive older installations and backup restoration.
     // Validate before normalization, then reject anything the normalizer lost.
-    for (const key of ['ielts', 'sat', 'learning', 'hessen', 'curriculum', 'recovery', 'semesterGrading']) if (source[key] !== undefined) assertNewDataRetained(source[key], normalized[key], key);
+    for (const key of ['ielts', 'sat', 'learning', 'hessen', 'curriculum', 'recovery', 'semesterGrading', 'universityGoals', 'testJourney', 'abiturTarget']) if (source[key] !== undefined) assertNewDataRetained(source[key], normalized[key], key);
     for (const key of ['targetAverage', 'language', 'prioritySubjects']) if (source.profile[key] !== undefined) assertNewDataRetained(source.profile[key], normalized.profile[key], `profile.${key}`);
     if (source.schedule.cycleAnchor !== undefined) assertNewDataRetained(source.schedule.cycleAnchor, normalized.schedule.cycleAnchor, 'schedule.cycleAnchor');
     if (source.schedule.lessons !== undefined) assertNewDataRetained(source.schedule.lessons, normalized.schedule.lessons, 'schedule.lessons');

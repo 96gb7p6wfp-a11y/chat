@@ -76,7 +76,7 @@ function ReviewForm({ data, review, previous, onSave, onClose }) {
   </form></Modal>;
 }
 
-export default function Progress({ data, today, onChange, notify, onOpenPlan, onOpenProfile, initialSubjectId = '', onPractice }) {
+export default function Progress({ data, today, onChange, notify, onOpenPlan, onOpenProfile, initialSubjectId = '', onPractice, embedded = false }) {
   const [week, setWeek] = useState(startOfWeek(today));
   const [modal, setModal] = useState(null);
   const progress = getProgress(data, today);
@@ -91,7 +91,7 @@ export default function Progress({ data, today, onChange, notify, onOpenPlan, on
   const nextWeekPriorities = week === currentWeek ? getDailyPlan(data, shiftDate(week, 7), today).tasks.filter((task) => !task.completed).slice(0, 3) : [];
 
   return <div className="screen progress-screen">
-    <header className="page-header"><p className="page-kicker">DEINE ENTWICKLUNG</p><h1 className="page-title">Fortschritt</h1></header>
+    {!embedded && <header className="page-header"><p className="page-kicker">DEINE ENTWICKLUNG</p><h1 className="page-title">Fortschritt</h1></header>}
     <div className="stack">
       <AcademicGrades onPractice={onPractice} initialSubjectId={initialSubjectId} data={data} today={today} onChange={onChange} notify={notify} onOpenProfile={onOpenProfile} />
       <HessenAbitur data={data} today={today} onChange={onChange} notify={notify}/>

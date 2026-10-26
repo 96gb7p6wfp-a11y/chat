@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, expect
+from coach_upgrade_browser import navigate, open_plan_view, select_profile_section, PROFILE_SECTIONS, expand
 
 KEY = 'northstar.coach.v2'
 RESULTS = Path(__file__).resolve().parents[1] / 'test-results' / 'responsive'
@@ -73,11 +74,16 @@ def close(page):
 
 
 def route(page, name):
-    page.evaluate('name => {location.hash=name}', name)
-    page.wait_for_timeout(40)
+    navigate(page, {'today':'Heute','plan':'Lernplan','progress':'Fortschritt','profile':'Profil'}.get(name,name))
 
 
 def click(page, name, role='button'):
+    if role == 'tab':
+        select_profile_section(page, name)
+        return
+    if not page.get_by_role('dialog').count() and name in ['Woche','Stundenplan','Prüfungen','Termine','Studienweg','Lernzeiten']:
+        open_plan_view(page, name)
+        return
     scope = page.get_by_role('dialog') if role == 'button' and page.get_by_role('dialog').count() else page
     scope.get_by_role(role, name=name, exact=True).click()
 
@@ -120,8 +126,9 @@ def suite(browser, url, seed, width, dark, scale):
     prefix=f'{width}-{"dark" if dark else "light"}-{scale}'
     capture=width in [320,390,768,1280] and (scale==100 or width==320)
     audit(page,prefix+'-today',capture)
-    modal(page,lambda:click(page,'Lernzeit anpassen'),prefix+'-today-time')
-    modal(page,lambda:click(page,'Eigene Priorität ergänzen'),prefix+'-custom-task')
+    expand(page.locator('.full-day'), 'Tagesplan & Verlauf')
+    modal(page,lambda:click(page,'Lernzeit ändern'),prefix+'-today-time')
+    modal(page,lambda:click(page,'Eigene Aufgabe'),prefix+'-custom-task')
     page.locator('.coach-task-open').first.click()
     populate_dialog(page)
     audit(page,prefix+'-guided-learning',capture)
@@ -132,7 +139,8 @@ def suite(browser, url, seed, width, dark, scale):
     if page.get_by_role('button',name='Lernen starten',exact=True).count():
         click(page,'Lernen starten')
         audit(page,prefix+'-tutor-explanation',capture)
-        click(page,'Zu den Aufgaben')
+        if page.get_by_role('button',name='Zu den Aufgaben',exact=True).count():
+            click(page,'Zu den Aufgaben')
         page.get_by_label('Deine Antwort',exact=True).fill('Eine ausführliche eigene Antwort mit Belegen, Erklärung und sorgfältiger Überprüfung.')
         audit(page,prefix+'-tutor-practice',capture)
         click(page,'Antwort prüfen')
@@ -186,7 +194,7 @@ def suite(browser, url, seed, width, dark, scale):
     close(page)
     close(page)
     route(page,'profile')
-    tabs=page.get_by_role('tab').all_text_contents()
+    tabs=list(PROFILE_SECTIONS)
     for name in tabs:
         click(page,name,role='tab')
         audit(page,prefix+'-profile-'+name)
@@ -213,7 +221,7 @@ def suite(browser, url, seed, width, dark, scale):
     modal(page,lambda:click(page,'Hinzufügen'),prefix+'-activity-form',capture)
     click(page,'Hochschulen',role='tab')
     modal(page,lambda:click(page,'Hinzufügen' if page.get_by_role('button',name='Hinzufügen',exact=True).count() else 'Hochschule speichern'),prefix+'-university-form')
-    click(page,'IELTS & SAT' if page.get_by_role('tab',name='IELTS & SAT',exact=True).count() else 'IELTS',role='tab')
+    click(page,'IELTS & SAT',role='tab')
     modal(page,lambda:click(page,'Ziel bearbeiten'),prefix+'-ielts-goal',capture)
     modal(page,lambda:click(page,'Ergebnis erfassen'),prefix+'-ielts-result')
     # A reduced visible viewport represents the keyboard opening. Focus and save controls

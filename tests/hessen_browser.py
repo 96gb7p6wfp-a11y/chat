@@ -13,7 +13,7 @@ import re
 import time
 import traceback
 from playwright.sync_api import sync_playwright, expect
-from coach_upgrade_browser import KEY, close_dialog, expand, no_overflow, state, wait_state
+from coach_upgrade_browser import navigate, open_plan_view, select_profile_section, KEY, close_dialog, expand, no_overflow, state, wait_state
 
 TODAY = '2026-10-28'
 NOW = datetime(2026, 10, 28, 8, 0, tzinfo=timezone.utc)
@@ -49,7 +49,7 @@ class HessenSuite:
         page.screenshot(path=str(RESULTS / f'{name}.png'), animations='disabled')
 
     def nav(self, page, label):
-        page.get_by_role('button', name=label, exact=True).click()
+        navigate(page, label)
 
     def fixture(self):
         assert self.base
@@ -71,7 +71,7 @@ class HessenSuite:
 
     def open_recovery(self, page):
         self.nav(page, 'Lernplan')
-        page.get_by_role('button', name='Prüfungen', exact=True).click()
+        open_plan_view(page, 'Prüfungen')
         page.locator('.exam-card').filter(has_text='Englisch Q1 · Testfall').get_by_role('button', name=re.compile('Wie lief deine Klausur|Nachbesprechung öffnen')).click()
         return page.get_by_role('dialog', name='Deine Klausur', exact=True)
 
@@ -159,7 +159,8 @@ class HessenSuite:
         expect(dialog.locator('.hessen-total')).to_contain_text('888')
         assert state(page)['grades'] == [], 'Semester scenarios do not create individual grades.'
         expand(dialog, 'Prüfung der Einbringung')
-        expect(dialog.locator('.hessen-validation')).to_contain_text('Keine Zulassungs- oder Bestehensbestätigung')
+        expect(dialog.locator('.hessen-validation')).to_contain_text('Fehlende Beleg- und Sonderfallangaben')
+        expect(dialog.locator('.hessen-validation')).to_contain_text(re.compile('offen', re.I))
         self.shot(page, '02-abitur-explained-scenario')
         page.reload(wait_until='networkidle')
         assert state(page)['hessen']['semesterResults'][0]['points'] == 9
@@ -190,12 +191,13 @@ class HessenSuite:
         task = next(item for item in state(page)['tasks'] if item['date'] == TODAY and item['learningTopic'] == 'recovery-english-diagnostic')
         button = page.get_by_role('button', name=f'Lernaufgabe öffnen: {task["title"]}', exact=True)
         if not button.is_visible():
-            expand(page.locator('.further-tasks'), 'Weitere geplante Schritte')
+            expand(page.locator('.full-day'), 'Tagesplan & Verlauf')
         button.click()
         dialog = page.get_by_role('dialog', name='Lerneinheit', exact=True)
         expect(dialog).to_contain_text('Fehlerursache eingrenzen')
         dialog.get_by_role('button', name='Lernen starten', exact=True).click()
-        dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
+        if dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).count():
+            dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
         expect(dialog).to_contain_text('tablets')
         dialog.get_by_label('Deine Antwort', exact=True).fill('No. The report does not establish that grades became worse.')
         dialog.get_by_role('button', name='Antwort prüfen', exact=True).click()
@@ -259,7 +261,8 @@ class HessenSuite:
         assert sum(item['minutes'] for item in planned) <= 150, 'Starting a topic must share the existing study budget.'
         expect(dialog).to_contain_text(re.compile('entladen|Entladung', re.I))
         dialog.get_by_role('button', name='Lernen starten', exact=True).click()
-        dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
+        if dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).count():
+            dialog.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
         expect(dialog).to_contain_text('R = 100 kΩ, C = 100 µF und U₀ = 12 V. Berechne τ und U(10 s).')
         dialog.get_by_label('Deine Antwort', exact=True).fill('τ = 100000 × 0.0001 s = 10 s; U(10 s) = 12 e^(-1) V ≈ 4.41 V')
         dialog.get_by_role('button', name='Antwort prüfen', exact=True).click()

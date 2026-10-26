@@ -16,6 +16,9 @@ import { normalizeHessen } from './hessen.js';
 import { normalizeCurriculum, getCurrentLearningTopics } from './curriculum.js';
 import { normalizeRecovery, getRecoveryCandidates } from './recovery.js';
 import { normalizeSemesterGrading } from './semester-grades.js';
+import { normalizeUniversityGoals, getUniversityGoalCandidates, getSATRelevance } from './university-goals.js';
+import { normalizeTestJourney } from './test-journeys.js';
+import { normalizeAbiturTarget } from './abitur-target.js';
 export { getSubjectPriorities } from './recommendations.js';
 
 const CATEGORIES = ['academics', 'language', 'university', 'activity', 'review'];
@@ -180,7 +183,7 @@ export function createInitialData({ today = localDateKey(), demo = true } = {}) 
   let state = {
     version: 2, createdDate: today, onboardingCompleted: false, demo: Boolean(demo),
     profile: normalProfile(), subjects: SUBJECTS.map(([id, name, level]) => ({ id, name, level, written: null, oral: null, baselineWritten: null, baselineOral: null, target: 10, weakTopics: [], enabled: ['mathematics', 'physics', 'english', 'german'].includes(id) })),
-    exams: [], events: [], tasks: [], grades: [], activities: [], universities: [], schedule: normalSchedule(), weeklyReviews: [], roadmapCompleted: [], reflections: [], legacyMilestones: [], dismissedTaskIds: [], study: createStudyState(), ielts: normalizeIELTS(), sat: normalizeSAT(), learning: normalizeLearning(), hessen: normalizeHessen(), curriculum: normalizeCurriculum(), recovery: normalizeRecovery(), semesterGrading: normalizeSemesterGrading(),
+    exams: [], events: [], tasks: [], grades: [], activities: [], universities: [], schedule: normalSchedule(), weeklyReviews: [], roadmapCompleted: [], reflections: [], legacyMilestones: [], dismissedTaskIds: [], study: createStudyState(), ielts: normalizeIELTS(), sat: normalizeSAT(), learning: normalizeLearning(), hessen: normalizeHessen(), curriculum: normalizeCurriculum(), recovery: normalizeRecovery(), semesterGrading: normalizeSemesterGrading(), universityGoals: normalizeUniversityGoals(), testJourney: normalizeTestJourney(), abiturTarget: normalizeAbiturTarget(),
   };
   state.universities = [
     { id: 'ucla', name: 'UCLA', country: 'USA', program: 'Explore data, business and technology programmes', deadline: '', requirements: 'Verify current UC requirements for international applicants. UC does not consider SAT/ACT for admission; check each programme and English-proficiency policy.', notes: 'Aspirational option. Keep a balanced list and research cost and financial support.', url: 'https://admission.ucla.edu/apply/international-applicants', status: 'researching' },
@@ -290,6 +293,7 @@ export function normalizeData(value, today = localDateKey()) {
     profile: normalProfile(value.profile), subjects: Array.isArray(value.subjects) ? subjects : base.subjects,
     exams: uniqueRecords(value.exams, normalExam), events: normalizeEvents(value.events), tasks, grades, study: normalizeStudy(value.study), ielts: normalizeIELTS(value.ielts), sat: normalizeSAT(value.sat), learning: normalizeLearning(value.learning), hessen: normalizeHessen(value.hessen), curriculum: normalizeCurriculum(value.curriculum), recovery: normalizeRecovery(value.recovery), semesterGrading: normalizeSemesterGrading(value.semesterGrading),
     activities: uniqueRecords(value.activities, normalActivity), universities: Array.isArray(value.universities) ? uniqueRecords(value.universities, normalUniversity) : base.universities,
+    universityGoals: normalizeUniversityGoals(value.universityGoals), testJourney: normalizeTestJourney(value.testJourney), abiturTarget: normalizeAbiturTarget(value.abiturTarget),
     schedule: normalSchedule(value.schedule), weeklyReviews: [...reviews.values()].sort((a, b) => b.weekStart.localeCompare(a.weekStart)),
     roadmapCompleted: words(value.roadmapCompleted, 300), dismissedTaskIds: words(value.dismissedTaskIds, 3000),
     legacyMilestones: uniqueRecords(value.legacyMilestones, milestone => milestone && text(milestone.id, 150) ? { id: text(milestone.id, 150), title: text(milestone.title, 300), description: text(milestone.description, 4000), category: text(milestone.category, 100), completed: milestone.completed === true } : null),
@@ -584,13 +588,18 @@ function makeCandidates(state, date) {
   // A joint daily cap below prevents parallel test plans from overloading it.
   const lastSAT = priorCompletionState.tasks.filter(task => task.completed && task.satSkill && completionDate(task) < date).map(completionDate).sort().at(-1);
   const satCadence = !lastSAT || daysBetween(lastSAT, date) >= 3 ? 20 : daysBetween(lastSAT, date) >= 2 ? 10 : 0;
-  for (const item of getSATCandidates(priorCompletionState, date)) {
+  const satRelevance = getSATRelevance(state, date);
+  const automaticSAT = !satRelevance.items.length || satRelevance.shouldPrepare || state.testJourney?.sat?.prepareAnyway === true;
+  for (const item of automaticSAT ? getSATCandidates(priorCompletionState, date) : []) {
     candidates.push(candidate(item.key, item.title, 'language', majorSchoolExamSoon ? Math.min(15, item.minutes) : item.minutes, item.score + (majorSchoolExamSoon ? 0 : satCadence), item.reason, {
       ...item, category: 'language', subjectId: '', goalId: 'tests',
       score: item.score + (majorSchoolExamSoon ? 0 : satCadence), minutes: majorSchoolExamSoon ? Math.min(15, item.minutes) : item.minutes,
       steps: item.steps.map(step => typeof step === 'string' ? step : `${step.title}${step.minutes ? ` · ${step.minutes} Min.` : ''}: ${step.instruction}`),
       resource: typeof item.resource === 'string' ? item.resource : item.resource?.url || '',
     }));
+  }
+  for (const item of getUniversityGoalCandidates(priorCompletionState, date)) {
+    candidates.push(candidate(item.key, item.title, item.category, item.minutes, item.score, item.reason, item));
   }
   for (const review of getLearningReviews(state, date).slice(0, 2)) {
     const subject = subjectFor(state, review.subjectId);
@@ -675,7 +684,7 @@ export function startTopicPractice(state, topic, date) {
   const committed = state.tasks.filter(task => task.date === date && !task.skipped && (task.origin === 'custom' || task.completed || task.id === state.study?.active?.taskId || task.notes?.trim() || task.selfReview?.length || hasTutorWork(state, task))).reduce((sum, task) => sum + task.minutes, 0);
   const minutes = Math.min(25, Math.max(0, available - committed));
   if (minutes < 5) throw new TypeError('Dein Lernfenster ist ausgefüllt. Passe zuerst deine Lernzeit an.');
-  const task = existing ? { ...existing, skipped: false, minutes: Math.min(existing.minutes, minutes) } : normalTask({ id, date, title: `${subjectLabel(subject)} · ${topic.title}`, subjectId: subject.id, category: languageKind(subject) ? 'language' : 'academics', minutes, learningTopic: topic.learningTopic,
+  const task = existing ? { ...existing, skipped: false, minutes: Math.min(existing.minutes, minutes) } : normalTask({ id, date, title: `${subjectLabel(subject)} · ${topic.title}`, subjectId: subject.id, category: languageKind(subject) || topic.ieltsSkill || topic.satSkill ? 'language' : 'academics', minutes, learningTopic: topic.learningTopic, ieltsSkill: topic.ieltsSkill || '', satSkill: topic.satSkill || '',
     objective: topic.title, expectedResult: 'Eine konkrete Aufgabe lösen und mit der Musterlösung vergleichen.', reason: 'Dein gewähltes Unterrichtsthema gezielt üben.', origin: 'custom', priority: 'high' });
   const next = ensureDailyPlan({ ...state, tasks: [...state.tasks.filter(item => item.id !== id), task] }, date, date);
   return { state: next, task: next.tasks.find(item => item.id === id) };
@@ -804,7 +813,8 @@ function planSignature(state, date) {
     testPlans: (testPlans || []).map(({ id, name, status, targetDate, targetScore }) => ({ id, name, status, targetDate, targetScore })),
   };
   const input = canonicalJSON({
-    engineVersion: 10, date, profile: planningProfile, subjects: state.subjects.map(({ forecast, ...subject }) => subject), grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), sat: normalizeSAT(state.sat), learning: { attempts: normalizeLearning(state.learning).attempts },
+    engineVersion: 12, date, profile: planningProfile, subjects: state.subjects.map(({ forecast, ...subject }) => subject), grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), sat: normalizeSAT(state.sat), learning: { attempts: normalizeLearning(state.learning).attempts },
+    universityGoals: normalizeUniversityGoals(state.universityGoals), testJourneyDecision: state.testJourney?.sat?.prepareAnyway === true, testDiagnostics: Object.fromEntries(['sat','ielts'].map(test => [test, { diagnostics: (state.testJourney?.[test]?.diagnostics || []).map(({id,date,checks,answers}) => ({id,date,checks,answered: Object.keys(answers || {}).filter(key => answers[key]?.trim())})), skillConfidence: state.testJourney?.[test]?.skillConfidence }])),
     curriculum: normalizeCurriculum(state.curriculum), recovery: normalizeRecovery(state.recovery),
     abiturChoices: normalizeHessen(state.hessen).examinationSubjects.map(({ slot, subjectId }) => ({ slot, subjectId })),
     confirmedSemesters: normalizeHessen(state.hessen).semesterResults.filter(result => result.status === 'confirmed'),

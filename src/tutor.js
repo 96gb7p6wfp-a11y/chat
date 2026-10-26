@@ -297,11 +297,11 @@ export function getTutorSession(data = {}, task = {}, today = task.date, selecte
     const unit = resolveTutorTopic(subjectId, selected);
     return unit ? materialize(unit, data, task, today, 'selection', exam) : unavailable('unsupported', `Für „${selected}“ gibt es noch kein geprüftes Übungsmodul. Wähle ein verfügbares Thema oder nutze dein Unterrichtsmaterial.`, selected);
   }
-  if (/^recovery-/.test(task.revisionStage || '') && subjectId !== 'english') return unavailable(choices.length ? 'choose-topic' : 'unsupported', 'Für dieses Fach ist die Diagnose aus dem Klausurfeedback noch nicht als eigene Übung umgesetzt. Wähle ein konkretes Fehlerthema; die App erfindet keine Ursache.');
   // New persisted unit IDs represent a concrete earlier choice, including a
   // scheduled review. Legacy generic labels such as en-analysis do not.
   const exact = UNITS.find(unit => unit.subjectId === subjectId && unit.id === task.learningTopic);
   if (exact) return materialize(exact, data, task, today, 'task', exam);
+  if (/^recovery-/.test(task.revisionStage || '') && !['english','german'].includes(subjectId)) return unavailable(choices.length ? 'choose-topic' : 'unsupported', 'Wähle ein konkretes Fehlerthema aus deinem Klausurfeedback. Die App erfindet keine Ursache.');
   if (subjectId === 'ielts' && task.ieltsSkill) { const unit = UNITS.find(unit => unit.subjectId === 'ielts' && unit.skill === task.ieltsSkill); return unit ? materialize(unit, data, task, today, 'task', exam) : unavailable('unsupported', 'Für diesen IELTS-Bereich ist keine konkrete Übung verfügbar.'); }
   if (subjectId === 'sat' && task.satSkill) { const unit = UNITS.find(unit => unit.subjectId === 'sat' && unit.skill === task.satSkill); return unit ? materialize(unit, data, task, today, 'task', exam) : unavailable('unsupported', 'Für diesen SAT-Bereich ist keine konkrete Übung verfügbar.'); }
   const examTopics = Array.isArray(exam?.topics) ? exam.topics.filter(item => typeof item === 'string' && item.trim()) : [];
@@ -316,6 +316,7 @@ export function getTutorSession(data = {}, task = {}, today = task.date, selecte
   // A deliberate topic session is more specific than the subject's other
   // current topics. Never swap the requested exercise for a different lesson.
   if (task.origin === 'custom' && task.id?.startsWith('topic-') && task.learningTopic) {
+    if(task.learningTopic==='choose-topic') return unavailable('choose-topic','Wähle dein aktuelles Unterrichtsthema. Dann beginnt die konkrete Übung.');
     const requested = resolveTutorTopic(subjectId, task.learningTopic);
     return requested ? materialize(requested, data, task, today, 'selection', exam) : unavailable('unsupported', `Für dein ausdrücklich gewähltes Thema „${task.learningTopic}“ fehlt noch eine konkrete interaktive Übung.`, task.learningTopic);
   }

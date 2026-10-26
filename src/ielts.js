@@ -1,4 +1,4 @@
-import { getPreparationContext, getPreparationHorizon, getPreparationMilestones } from './test-preparation.js';
+import { getInformalPracticeNeeds, getPreparationContext, getPreparationHorizon, getPreparationMilestones } from './test-preparation.js';
 
 // IELTS evidence and preparation are separate: completing work never creates a band score.
 export const IELTS_SKILLS = ['listening', 'reading', 'writing', 'speaking'];
@@ -125,6 +125,7 @@ export function getIELTSCandidates(state, today) {
   const { completed, remaining, schoolCap } = summary.context;
   if (remaining < 10) return [];
   const minutes = Math.min(remaining, schoolCap, daysUntil !== null && daysUntil <= 1 ? 15 : daysUntil !== null && daysUntil <= 28 ? 45 : 30);
+  const informal = getInformalPracticeNeeds(state, 'ielts', today);
   return summary.skills.map((item, index) => {
     const practice = getIELTSPractice(item.skill, { days: daysUntil, minutes, mistakes: item.mistakes });
     const urgent = daysUntil !== null && daysUntil <= 21;
@@ -133,7 +134,7 @@ export function getIELTSCandidates(state, today) {
     const practicePenalty = sincePractice === null ? 0 : sincePractice === 0 ? 30 : sincePractice <= 2 ? 20 : sincePractice <= 4 ? 8 : 0;
     const reason = item.gap > 0 ? `${item.label}: ${item.current.toFixed(1)} (${item.source === 'official' ? 'offiziell' : item.source === 'mock' ? 'Probeprüfung' : 'selbst eingeschätzt'}) → Ziel ${item.target.toFixed(1)}.` : item.current === null ? `Für ${item.label} fehlt noch ein Ergebnis. Beginne mit einer kurzen Standortbestimmung.` : `Halte ${item.label} durch gezielte Übung stabil.`;
     return { key: `ielts-${item.skill}`, category: 'Language', skill: item.skill, ieltsSkill: item.skill, title: practice.title, minutes,
-      score: 40 + (item.gap || 0) * 8 + (urgent ? 14 : 0) + (item.current === null ? 3 : 0) - practicePenalty - index * .01,
+      score: 40 + (!item.evidenceCount && (informal.some(entry => entry.skill === item.skill) || state.testJourney?.ielts?.skillConfidence?.[item.skill] === 'practice') ? 9 : 0) + (item.gap || 0) * 8 + (urgent ? 14 : 0) + (item.current === null ? 3 : 0) - practicePenalty - index * .01,
       reason: `${reason}${daysUntil !== null ? ` ${data.dateStatus === 'booked' ? 'Gebuchte Prüfung' : 'Geplanter Termin'} ${daysUntil === 0 ? 'heute' : `in ${daysUntil} Tagen`}.` : ''}`,
       ...practice, goalId: 'english', expectedResult: practice.expectedResult, workloadReason: summary.context.reason };
   }).sort((a, b) => b.score - a.score);

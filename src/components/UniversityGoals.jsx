@@ -1,0 +1,85 @@
+import React, { useState } from 'react';
+import { ArrowRight, ExternalLink, Plus, Pencil, Trash2, ChevronRight } from 'lucide-react';
+import { Button, Field, Modal } from './UI.jsx';
+import { UNIVERSITY_PRESETS, REQUIREMENT_KINDS, REQUIREMENT_LABELS, normalizeUniversityGoals, createUniversityGoal, saveUniversityGoal, removeUniversityGoal, saveUniversityRequirement, getUniversityGoalSummary, getRequirementReliability, getSATRelevance } from '../university-goals.js';
+import { subjectLabel } from '../i18n.js';
+import { UniversityReference } from './OfficialReferences.jsx';
+import './university-goals.css';
+
+const optionalNumber = value => value === '' ? null : Number(value);
+const presetLabel = goal => UNIVERSITY_PRESETS.find(item => item.id === goal.institutionId)?.shortName || goal.name;
+
+function GoalForm({ data, goal, today, onChange, onClose }) {
+  const [form, setForm] = useState(goal || createUniversityGoal('ucl'));
+  const [error, setError] = useState('');
+  const set = key => event => setForm(value => ({ ...value, [key]: event.target.value }));
+  const choose = event => {
+    const preset = UNIVERSITY_PRESETS.find(item => item.id === event.target.value);
+    const next = createUniversityGoal(preset?.id, { name: preset ? undefined : '', programme: preset?.programme || '', entryYear: form.entryYear, id: form.id, country: preset?.country || 'Germany', priority: form.priority });
+    setForm(next || { ...form, institutionId: 'custom', name: '', programme: '', country: 'Germany', sourceUrl: '', requirements: [] });
+  };
+  return <Modal title="Studienziel" onClose={onClose}><form className="stack university-goal-form" onSubmit={event => { event.preventDefault(); try { onChange(current => saveUniversityGoal(current, form)); onClose(); } catch (error) { setError(error.message); } }}>
+    <Field label="Hochschule"><select value={form.institutionId} onChange={choose}>{UNIVERSITY_PRESETS.map(preset => <option key={preset.id} value={preset.id}>{preset.shortName}</option>)}<option value="custom">Andere Hochschule</option></select></Field>
+    {form.institutionId === 'custom' && <Field label="Name der Hochschule"><input value={form.name} onChange={set('name')} maxLength={300} required/></Field>}
+    <Field label="Studiengang"><input value={form.programme} onChange={set('programme')} maxLength={300} required/></Field>
+    <div className="university-form-grid"><Field label="Land"><select value={form.country} onChange={set('country')}><option value="UK">Vereinigtes Königreich</option><option value="USA">USA</option><option value="Germany">Deutschland</option></select></Field><Field label="Studienbeginn"><input type="number" inputMode="numeric" min="2020" max="2100" value={form.entryYear} onChange={event => setForm(value => ({ ...value, entryYear: optionalNumber(event.target.value) }))} required/></Field></div>
+    <Field label="Priorität"><select value={form.priority} onChange={set('priority')}><option value="high">Hauptziel</option><option value="normal">Wichtige Option</option><option value="low">Weitere Option</option></select></Field>
+    <details className="product-details"><summary>Quelle & Notizen</summary><div className="stack"><Field label="Offizielle Programmseite"><input type="url" value={form.sourceUrl} onChange={set('sourceUrl')} placeholder="https://…"/></Field><Field label="Deine Notizen"><textarea value={form.notes} onChange={set('notes')} rows={3} maxLength={3000}/></Field></div></details>
+    {goal && <label className="university-check"><input type="checkbox" checked={form.active} onChange={event => setForm(value => ({ ...value, active: event.target.checked }))}/><span>Für Empfehlungen berücksichtigen</span></label>}
+    {error && <p className="form-error" role="alert">{error}</p>}<div className="sheet-footer"><Button variant="secondary" onClick={onClose}>Abbrechen</Button><Button type="submit">Studienziel speichern</Button></div>
+  </form></Modal>;
+}
+
+function RequirementForm({ data, goal, requirement, today, onChange, onClose }) {
+  const [form, setForm] = useState(requirement);
+  const [error, setError] = useState('');
+  const set = key => event => setForm(value => ({ ...value, [key]: event.target.value }));
+  const numeric = key => event => setForm(value => ({ ...value, [key]: optionalNumber(event.target.value) }));
+  const reliability = getRequirementReliability(goal, form, today);
+  return <Modal title="Anforderung prüfen" onClose={onClose}><form className="stack university-requirement-form" onSubmit={event => { event.preventDefault(); try { const changed = saveUniversityRequirement(data, goal.id, form, today); onChange(changed); onClose(); } catch (error) { setError(error.message); } }}>
+    <div className="university-verification-intro"><span>{presetLabel(goal)} · {goal.programme} · {goal.entryYear}</span><h3>{form.label}</h3><p>Übernimm nur, was die offizielle Quelle für dein Programm tatsächlich sagt. Ältere Jahrgänge bleiben vorläufig.</p></div>
+    {form.sourceUrl && <a className="button button-secondary" href={form.sourceUrl} target="_blank" rel="noreferrer">Offizielle Quelle öffnen <ExternalLink size={15}/></a>}
+    <Field label="Anforderung / genauer Wortlaut"><textarea value={form.text} onChange={set('text')} rows={3} maxLength={3000}/></Field>
+    {form.kind === 'subject' && <><Field label="Betroffenes Fach"><select value={form.subjectId} onChange={set('subjectId')}><option value="">Bitte wählen</option>{data.subjects.map(subject => <option key={subject.id} value={subject.id}>{subjectLabel(subject)}</option>)}</select></Field><Field label="Verlangte Punkte · optional"><input type="number" min="0" max="15" step="0.1" value={form.minPoints ?? ''} onChange={numeric('minPoints')}/></Field><Field label="Verlangter Nachweis"><select value={form.evidenceScope} onChange={set('evidenceScope')}><option value="unknown">Noch nicht geklärt</option><option value="semester">Bestimmte Halbjahresnote</option><option value="abitur-exam">Abiturprüfung im Fach</option></select></Field>{form.evidenceScope === 'semester' && <Field label="Verlangtes Halbjahr"><select value={form.semester} onChange={set('semester')}><option value="">Bitte wählen</option>{['Q1', 'Q2', 'Q3', 'Q4'].map(semester => <option key={semester}>{semester}</option>)}</select></Field>}</>}
+    {form.kind === 'overall' && <Field label="Verlangte Abitur-Durchschnittsnote · optional" help="Nur eine ausdrücklich veröffentlichte deutsche Gleichwertigkeit eintragen."><input type="number" min="1" max="4" step="0.1" value={form.maxAbiturGrade ?? ''} onChange={numeric('maxAbiturGrade')}/></Field>}
+    {form.kind === 'english' && <Field label="IELTS Overall Minimum · optional" help="Einzelbandvorgaben, Testform und Gültigkeit im Wortlaut festhalten."><input type="number" min="0" max="9" step="0.5" value={form.minimumBand ?? ''} onChange={numeric('minimumBand')}/></Field>}
+    {form.kind === 'sat' && <Field label="SAT / ACT Regel"><select value={form.testPolicy} onChange={set('testPolicy')}><option value="unknown">Noch ungeklärt</option><option value="required">Erforderlich</option><option value="optional">Optional</option><option value="not-used">Nicht für Zulassung berücksichtigt</option><option value="not-required">Nicht erforderlich</option></select></Field>}
+    {form.kind === 'deadline' && <Field label="Bestätigte Bewerbungsfrist · optional"><input type="date" value={form.deadlineDate} onChange={set('deadlineDate')}/></Field>}
+    <details className="product-details" open><summary>Quelle zuordnen</summary><div className="stack"><Field label="Offizielle Quellenadresse"><input type="url" value={form.sourceUrl} onChange={set('sourceUrl')} required/></Field><Field label="Hochschule in der Quelle"><input value={form.sourceInstitution} onChange={set('sourceInstitution')} maxLength={300}/></Field><Field label="Studiengang in der Quelle"><input value={form.sourceProgramme} onChange={set('sourceProgramme')} maxLength={300}/></Field><Field label="Geltungsbereich"><select value={form.sourceScope} onChange={set('sourceScope')}><option value="programme">Dieser Studiengang</option><option value="institution">Hochschulweit</option></select></Field><div className="university-form-grid"><Field label="Dein Eintrittsjahr"><input type="number" min="2020" max="2100" value={form.entryYear ?? ''} onChange={numeric('entryYear')}/></Field><Field label="Bezugsjahr der Quelle"><input type="number" min="2020" max="2100" value={form.referenceYear ?? ''} onChange={numeric('referenceYear')}/></Field></div><Field label="Geprüft am"><input type="date" max={today} value={form.verifiedAt} onChange={set('verifiedAt')}/></Field><Field label="Dein Quellenvermerk" help="Was gilt genau? Notiere auch Ausnahmen oder offene Bedingungen."><textarea rows={3} maxLength={3000} value={form.manualNote} onChange={set('manualNote')}/></Field><label className="university-check"><input type="checkbox" checked={form.manualChecked} onChange={event => setForm(value => ({ ...value, manualChecked: event.target.checked }))}/><span>Ich habe die offizielle Quelle und ihre Gültigkeit geprüft.</span></label></div></details>
+    <Field label="Verlässlichkeitsstatus"><select value={form.status} onChange={set('status')}><option value="provisional">Vorläufig / noch zu prüfen</option><option value="confirmed">Für mein Eintrittsjahr bestätigt</option><option value="not-published">Für mein Eintrittsjahr noch nicht veröffentlicht</option></select></Field>
+    <p className="field-help">{reliability.reason} Keine automatisch recherchierte Bestätigung.</p>
+    {error && <p className="form-error" role="alert">{error}</p>}<div className="sheet-footer"><Button variant="secondary" onClick={onClose}>Abbrechen</Button><Button type="submit">Anforderung speichern</Button></div>
+  </form></Modal>;
+}
+
+function GoalDetail({ data, goal, today, onChange, onClose, onEdit, onRequirement, onLearn, onApplyAbiturTarget }) {
+  const summary = getUniversityGoalSummary({ ...data, universityGoals: { version: 1, goals: [goal] } }, today);
+  const compared = summary.primary.comparisons;
+  return <Modal title="Studienziel im Blick" onClose={onClose}><div className="university-goal-detail stack">
+    <header className="university-destination"><span>{presetLabel(goal)} · {goal.country === 'UK' ? 'Vereinigtes Königreich' : goal.country === 'USA' ? 'USA' : 'Deutschland'} · {goal.entryYear}</span><h3>{goal.programme}</h3><button className="text-button" onClick={onEdit}><Pencil size={14}/>Ziel bearbeiten</button></header>
+    <section className="university-next-action"><span>DEIN NÄCHSTER SCHRITT</span><h4>{summary.nextAction.title}</h4><p>{summary.nextAction.why}</p>{summary.nextAction.type === 'academic' && onLearn ? <Button onClick={() => onLearn(summary.nextAction.subjectId)}>Lernen öffnen <ArrowRight size={15}/></Button> : <Button onClick={() => onRequirement(compared.find(requirement => !requirement.confirmed) || compared[0])}>Eine Anforderung prüfen <ArrowRight size={15}/></Button>}</section>
+    {summary.abiturTarget && onApplyAbiturTarget && <Button variant="secondary" onClick={() => onApplyAbiturTarget(summary.abiturTarget)}>Bestätigtes Abiturziel übernehmen · {summary.abiturTarget.grade.toLocaleString('de-DE')}</Button>}
+    <UniversityReference goal={goal} onApplyAbiturTarget={onApplyAbiturTarget}/>
+    <div className="university-requirement-list" aria-label="Programm-Anforderungen">{compared.map(requirement => <button className="university-requirement-row" key={requirement.id} aria-label={`${requirement.label} prüfen`} onClick={() => onRequirement(requirement)}><span><strong>{requirement.label}</strong><small>{requirement.statusLabel}</small></span><span className={`requirement-source-state ${requirement.confirmed ? 'is-confirmed' : ''}`}>{requirement.confirmed ? 'Quelle geprüft' : requirement.reliability.status === 'not-published' ? 'Noch nicht veröffentlicht' : 'Vorläufig'}</span><ChevronRight size={16}/></button>)}</div>
+    <details className="product-details"><summary>Was bedeuten die Angaben?</summary><p className="field-help">Bestätigte Vorgaben für {goal.entryYear} brauchen eine passende offizielle Veröffentlichung. Ältere geprüfte Referenzen bleiben als solche gekennzeichnet. UCL und UCLA sind verschiedene Hochschulen. Die App setzt ältere Anforderungen nicht als bestätigt voraus. Eine erfasste Mindestanforderung zu erfüllen garantiert keine Zulassung.</p></details>
+  </div></Modal>;
+}
+
+export default function UniversityGoals({ data, today, onChange, notify, onLearn, onApplyAbiturTarget, embedded = false }) {
+  const [modal, setModal] = useState(null), [pendingDelete, setPendingDelete] = useState(''), [compare, setCompare] = useState(false);
+  const config = normalizeUniversityGoals(data.universityGoals), summary = getUniversityGoalSummary(data, today), sat = getSATRelevance(data, today);
+  const selected = config.goals.find(goal => goal.id === modal?.goalId);
+  return <section className="university-goals" aria-label="Studienziele">
+    <div className="university-goals-heading">{!embedded && <div><span className="page-kicker">DEIN WEG</span><h2>Studienziele</h2></div>}<Button variant={config.goals.length ? 'secondary' : 'primary'} onClick={() => setModal({ type: 'goal' })}><Plus size={16}/>{config.goals.length ? 'Ziel ergänzen' : 'Studienziel wählen'}</Button></div>
+    {!config.goals.length ? <p className="university-goals-empty">Wähle Hochschule, Studiengang und Eintrittsjahr. Dann siehst du, was zu klären ist und welcher nächste Schritt hilft.</p> : <>
+      <div className="university-goal-list">{config.goals.map(goal => <div className="university-goal-item" key={goal.id}><button className="university-goal-open" aria-label={`${presetLabel(goal)} · ${goal.programme} öffnen`} onClick={() => setModal({ type: 'detail', goalId: goal.id })}><span><small>{presetLabel(goal)} · {goal.entryYear}{!goal.active ? ' · pausiert' : goal.priority === 'high' ? ' · Hauptziel' : ''}</small><strong>{goal.programme}</strong></span><ChevronRight size={17}/></button><button type="button" className="icon-button" aria-label={`${presetLabel(goal)} · ${goal.programme} löschen`} onClick={() => setPendingDelete(goal.id)}><Trash2 size={15}/></button></div>)}</div>
+      <button type="button" className="text-button" onClick={() => setCompare(value => !value)}>{compare ? 'Vergleich schließen' : 'Studienziele vergleichen'} <ArrowRight size={14}/></button>
+      {compare && <div className="university-comparison" aria-label="Studienziele im Vergleich">{summary.goals.map(goal => <section key={goal.id}><h3>{goal.label}</h3>{['overall', 'subject', 'english', 'sat', 'admissions-test'].map(kind => { const requirement = goal.comparisons.find(item => item.kind === kind); return requirement ? <div className="university-comparison-line" key={kind}><span>{REQUIREMENT_LABELS[kind]}</span><strong>{requirement.statusLabel}</strong></div> : null; })}<p>{getUniversityGoalSummary({ ...data, universityGoals: { version: 1, goals: [goal] } }, today).nextAction.title}</p><Button variant="secondary" onClick={() => setModal({ type: 'detail', goalId: goal.id })}>Nächsten Schritt ansehen</Button></section>)}</div>}
+      <details className="product-details university-sat-decision"><summary>Brauche ich SAT?</summary><div className="stack compact"><strong>{sat.headline}</strong>{sat.items.map(item => <div key={item.id}><p><strong>{item.label}</strong></p><p className="field-help">{item.reason}</p></div>)}{sat.needsVerification && <p className="field-help">Die Regeln für dein Eintrittsjahr bleiben zu prüfen. Ohne bestätigten Bedarf wird SAT nicht automatisch empfohlen.</p>}</div></details>
+    </>}
+    {modal?.type === 'goal' && <GoalForm key={selected?.id || 'new'} data={data} goal={selected} today={today} onChange={onChange} onClose={() => setModal(null)}/>}
+    {modal?.type === 'detail' && selected && <GoalDetail data={data} goal={selected} today={today} onChange={onChange} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'goal', goalId: selected.id })} onRequirement={requirement => requirement && setModal({ type: 'requirement', goalId: selected.id, requirementId: requirement.id })} onLearn={onLearn} onApplyAbiturTarget={onApplyAbiturTarget}/>}
+    {modal?.type === 'requirement' && selected && <RequirementForm key={modal.requirementId} data={data} goal={selected} requirement={selected.requirements.find(requirement => requirement.id === modal.requirementId)} today={today} onChange={onChange} onClose={() => setModal({ type: 'detail', goalId: selected.id })}/>}
+    {pendingDelete && <Modal title="Studienziel entfernen?" onClose={() => setPendingDelete('')}><p>Deine Noten, Lernfortschritte und bisherigen Hochschulnotizen bleiben erhalten.</p><div className="sheet-footer"><Button variant="secondary" onClick={() => setPendingDelete('')}>Behalten</Button><Button onClick={() => { onChange(current => removeUniversityGoal(current, pendingDelete)); setPendingDelete(''); notify?.('Studienziel entfernt.'); }}>Ziel entfernen</Button></div></Modal>}
+  </section>;
+}
