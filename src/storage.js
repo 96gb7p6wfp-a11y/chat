@@ -1,5 +1,9 @@
 import { createPersonalProfile, ensureDailyPlan, migrateLegacy, normalizeData } from './coach.js';
 import { EVENT_INTENTS, EVENT_PATHWAYS, EVENT_TYPES } from './events.js';
+import { normalizeHessen } from './hessen.js';
+import { normalizeCurriculum } from './curriculum.js';
+import { normalizeRecovery } from './recovery.js';
+import { normalizeSemesterGrading } from './semester-grades.js';
 
 export const STORAGE_KEY = 'northstar.coach.v2';
 export const LEGACY_KEY = 'northstar.data.v1';
@@ -347,6 +351,13 @@ function validateCurrent(value) {
   validateIELTS(value.ielts);
   validateSAT(value.sat);
   validateLearning(value.learning);
+  // Reject invalid additive data before a restore can silently discard records.
+  // Older backups omit these fields and migrate without altering existing data.
+  for (const [key, normalize] of [['hessen', normalizeHessen], ['curriculum', normalizeCurriculum], ['recovery', normalizeRecovery], ['semesterGrading', normalizeSemesterGrading]]) {
+    if (value[key] === undefined) continue;
+    if (!object(value[key])) fail(`${key} must contain an object.`);
+    assertNewDataRetained(value[key], normalize(value[key]), key);
+  }
 }
 
 function validateIELTS(value) {
@@ -606,7 +617,7 @@ function assertRetained(source, normalized, legacy = false) {
   if (!legacy) {
     // Additive v2 data must survive older installations and backup restoration.
     // Validate before normalization, then reject anything the normalizer lost.
-    for (const key of ['ielts', 'sat', 'learning']) if (source[key] !== undefined) assertNewDataRetained(source[key], normalized[key], key);
+    for (const key of ['ielts', 'sat', 'learning', 'hessen', 'curriculum', 'recovery', 'semesterGrading']) if (source[key] !== undefined) assertNewDataRetained(source[key], normalized[key], key);
     for (const key of ['targetAverage', 'language', 'prioritySubjects']) if (source.profile[key] !== undefined) assertNewDataRetained(source.profile[key], normalized.profile[key], `profile.${key}`);
     if (source.schedule.cycleAnchor !== undefined) assertNewDataRetained(source.schedule.cycleAnchor, normalized.schedule.cycleAnchor, 'schedule.cycleAnchor');
     if (source.schedule.lessons !== undefined) assertNewDataRetained(source.schedule.lessons, normalized.schedule.lessons, 'schedule.lessons');
@@ -616,7 +627,7 @@ function assertRetained(source, normalized, legacy = false) {
       ['activities', ['evidenceStatus', 'evidence', 'projectUrl']],
       ['universities', ['requirementsStatus', 'requirementsSource', 'requirementsCheckedDate']],
       ['tasks', ['objective', 'expectedResult', 'learningTopic', 'ieltsSkill', 'satSkill', 'reviewDate', 'movedFrom']],
-      ['exams', ['time', 'importance', 'notes', 'preparation', 'importKey', 'room', 'level']],
+      ['exams', ['time', 'importance', 'notes', 'preparation', 'importKey', 'room', 'level', 'semester']],
     ]) for (const record of source[collection] || []) {
       const restored = normalized[collection].find(item => item.id === record.id);
       for (const key of keys) if (record[key] !== undefined) assertNewDataRetained(record[key], restored?.[key], `${collection}.${record.id}.${key}`);

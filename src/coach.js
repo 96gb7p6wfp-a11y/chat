@@ -12,6 +12,10 @@ import { normalizeLessons, lessonBlocks } from './timetable.js';
 import { normalizeIELTS, getIELTSCandidates, getIELTSSummary } from './ielts.js';
 import { normalizeSAT, getSATCandidates, getSATSummary } from './sat.js';
 import { normalizeLearning, getLearningReviews, getTaskLearningMetadata } from './guided-learning.js';
+import { normalizeHessen } from './hessen.js';
+import { normalizeCurriculum, getCurrentLearningTopics } from './curriculum.js';
+import { normalizeRecovery, getRecoveryCandidates } from './recovery.js';
+import { normalizeSemesterGrading } from './semester-grades.js';
 export { getSubjectPriorities } from './recommendations.js';
 
 const CATEGORIES = ['academics', 'language', 'university', 'activity', 'review'];
@@ -114,7 +118,7 @@ function normalSubject(subject) {
 }
 function normalExam(exam) {
   if (!exam || !text(exam.id, 150) || !text(exam.title, 300) || !isDateKey(exam.date)) return null;
-  return { id: text(exam.id, 150), title: text(exam.title, 300), subjectId: text(exam.subjectId, 150), date: exam.date, topics: words(exam.topics), format: ['written', 'oral', 'test', 'practical'].includes(exam.format) ? exam.format : 'written', target: number(exam.target, Object.hasOwn(exam, 'target') ? null : 10, 0, 15), time: clockMinutes(exam.time) !== null ? exam.time : '', importance: ['low', 'normal', 'high'].includes(exam.importance) ? exam.importance : 'normal', notes: text(exam.notes, 3000), preparation: text(exam.preparation, 3000), importKey: text(exam.importKey, 150), room: text(exam.room, 100), ...(exam.level === 'LK' || exam.level === 'GK' ? { level: exam.level } : {}), ...(isDateKey(exam.createdDate) ? { createdDate: exam.createdDate } : {}) };
+  return { id: text(exam.id, 150), title: text(exam.title, 300), subjectId: text(exam.subjectId, 150), date: exam.date, topics: words(exam.topics), ...(exam.semester !== undefined ? { semester: ['Q1', 'Q2', 'Q3', 'Q4'].includes(exam.semester) ? exam.semester : '' } : {}), format: ['written', 'oral', 'test', 'practical'].includes(exam.format) ? exam.format : 'written', target: number(exam.target, Object.hasOwn(exam, 'target') ? null : 10, 0, 15), time: clockMinutes(exam.time) !== null ? exam.time : '', importance: ['low', 'normal', 'high'].includes(exam.importance) ? exam.importance : 'normal', notes: text(exam.notes, 3000), preparation: text(exam.preparation, 3000), importKey: text(exam.importKey, 150), room: text(exam.room, 100), ...(exam.level === 'LK' || exam.level === 'GK' ? { level: exam.level } : {}), ...(isDateKey(exam.createdDate) ? { createdDate: exam.createdDate } : {}) };
 }
 function normalTask(task) {
   if (!task || !text(task.id, 200) || !text(task.title, 300) || !isDateKey(task.date)) return null;
@@ -176,7 +180,7 @@ export function createInitialData({ today = localDateKey(), demo = true } = {}) 
   let state = {
     version: 2, createdDate: today, onboardingCompleted: false, demo: Boolean(demo),
     profile: normalProfile(), subjects: SUBJECTS.map(([id, name, level]) => ({ id, name, level, written: null, oral: null, baselineWritten: null, baselineOral: null, target: 10, weakTopics: [], enabled: ['mathematics', 'physics', 'english', 'german'].includes(id) })),
-    exams: [], events: [], tasks: [], grades: [], activities: [], universities: [], schedule: normalSchedule(), weeklyReviews: [], roadmapCompleted: [], reflections: [], legacyMilestones: [], dismissedTaskIds: [], study: createStudyState(), ielts: normalizeIELTS(), sat: normalizeSAT(), learning: normalizeLearning(),
+    exams: [], events: [], tasks: [], grades: [], activities: [], universities: [], schedule: normalSchedule(), weeklyReviews: [], roadmapCompleted: [], reflections: [], legacyMilestones: [], dismissedTaskIds: [], study: createStudyState(), ielts: normalizeIELTS(), sat: normalizeSAT(), learning: normalizeLearning(), hessen: normalizeHessen(), curriculum: normalizeCurriculum(), recovery: normalizeRecovery(), semesterGrading: normalizeSemesterGrading(),
   };
   state.universities = [
     { id: 'ucla', name: 'UCLA', country: 'USA', program: 'Explore data, business and technology programmes', deadline: '', requirements: 'Verify current UC requirements for international applicants. UC does not consider SAT/ACT for admission; check each programme and English-proficiency policy.', notes: 'Aspirational option. Keep a balanced list and research cost and financial support.', url: 'https://admission.ucla.edu/apply/international-applicants', status: 'researching' },
@@ -284,7 +288,7 @@ export function normalizeData(value, today = localDateKey()) {
     ...base, version: 2, createdDate: isDateKey(value.createdDate) ? value.createdDate : today,
     onboardingCompleted: value.onboardingCompleted === true, demo: value.demo === true,
     profile: normalProfile(value.profile), subjects: Array.isArray(value.subjects) ? subjects : base.subjects,
-    exams: uniqueRecords(value.exams, normalExam), events: normalizeEvents(value.events), tasks, grades, study: normalizeStudy(value.study), ielts: normalizeIELTS(value.ielts), sat: normalizeSAT(value.sat), learning: normalizeLearning(value.learning),
+    exams: uniqueRecords(value.exams, normalExam), events: normalizeEvents(value.events), tasks, grades, study: normalizeStudy(value.study), ielts: normalizeIELTS(value.ielts), sat: normalizeSAT(value.sat), learning: normalizeLearning(value.learning), hessen: normalizeHessen(value.hessen), curriculum: normalizeCurriculum(value.curriculum), recovery: normalizeRecovery(value.recovery), semesterGrading: normalizeSemesterGrading(value.semesterGrading),
     activities: uniqueRecords(value.activities, normalActivity), universities: Array.isArray(value.universities) ? uniqueRecords(value.universities, normalUniversity) : base.universities,
     schedule: normalSchedule(value.schedule), weeklyReviews: [...reviews.values()].sort((a, b) => b.weekStart.localeCompare(a.weekStart)),
     roadmapCompleted: words(value.roadmapCompleted, 300), dismissedTaskIds: words(value.dismissedTaskIds, 3000),
@@ -522,7 +526,9 @@ function makeCandidates(state, date) {
   }
   for (const subject of state.subjects.filter(subject => subject.enabled && (!graduated || languageKind(subject)))) {
     if (candidates.some(item => item.examId && item.subjectId === subject.id)) continue;
-    const topic = subject.weakTopics[ordinal % Math.max(1, subject.weakTopics.length)] || (graduated ? 'wissenschaftsnahes Schreiben' : 'den unklarsten Inhalt der letzten Stunde');
+    const currentTopics = getCurrentLearningTopics(state, subject.id);
+    const selectedTopic = currentTopics[ordinal % Math.max(1, currentTopics.length)];
+    const topic = selectedTopic?.title || subject.weakTopics[ordinal % Math.max(1, subject.weakTopics.length)] || (graduated ? 'wissenschaftsnahes Schreiben' : 'Unterrichtsthema auswählen');
     const gap = subjectGap(subject);
     const academic = calculateSubject(state, subject.id);
     const grade = academic.average;
@@ -533,7 +539,13 @@ function makeCandidates(state, date) {
     const title = language ? `${subjectLabel(subject)}: ${topic} gezielt verbessern` : `${subjectLabel(subject)}: ${topic} üben`;
     candidates.push(candidate(`subject-${subject.id}`, title, language ? 'language' : 'academics', boost?.subjectId === subject.id ? 20 : 25, score,
       `${graduated ? 'Stärke klares wissenschaftsnahes Schreiben für Studium und Bewerbungen.' : grade === null ? academic.records.length ? academic.reason : 'Kläre deinen aktuellen Lernstand vor der nächsten Leistung.' : `${components} ${academic.methodLabel}: ${grade.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte; ${subject.target === null ? 'Ziel noch offen' : `Ziel ${subject.target}`}. ${weakComponent}`}${boost?.subjectId === subject.id ? ` ${boost.reason}` : ''}`,
-      { subjectId: subject.id, goalId: language ? 'language' : 'grades', steps: language ? [`Schreibe einen klar gegliederten Absatz mit ${graduated ? 'deinem aktuellen Übungsmaterial' : 'deinem Unterrichtsmaterial'}.`, 'Prüfe Aufbau, Grammatik und Genauigkeit. Verbessere einen Satz.'] : ['Erkläre den Gedanken aus dem Gedächtnis.', 'Bearbeite zwei passende Übungsfragen und korrigiere deine Fehler.'] }));
+      { subjectId: subject.id, learningTopic: selectedTopic?.learningTopic || '', goalId: language ? 'language' : 'grades', steps: language ? [`Schreibe einen klar gegliederten Absatz mit ${graduated ? 'deinem aktuellen Übungsmaterial' : 'deinem Unterrichtsmaterial'}.`, 'Prüfe Aufbau, Grammatik und Genauigkeit. Verbessere einen Satz.'] : ['Erkläre den Gedanken aus dem Gedächtnis.', 'Bearbeite zwei passende Übungsfragen und korrigiere deine Fehler.'] }));
+  }
+  // Recovery uses the same candidate queue, study windows and daily allowance.
+  // A finished exam is never replaced by an invented second Klausur.
+  for (const item of getRecoveryCandidates(priorCompletionState, date)) {
+    if (!subjectFor(state, item.subjectId)?.enabled) continue;
+    candidates.push(candidate(item.key, item.title, item.category || 'language', item.minutes, item.score, item.reason, item));
   }
   const languageId = ordinal % 2 === 0 ? 'english' : 'german';
   const languageSubject = state.subjects.find(subject => languageKind(subject) === languageId && subject.enabled);
@@ -649,6 +661,24 @@ function makeCandidates(state, date) {
 function hasTutorWork(state, task) {
   const session = state.learning?.sessions?.find(item => item.taskId === task.id);
   return !!(session && (session.startedAt || session.completedAt || Object.values(session.answers || {}).some(answer => typeof answer === 'string' && answer.trim())));
+}
+
+/** A deliberate topic session replaces unstarted generated work within today's allowance. */
+export function startTopicPractice(state, topic, date) {
+  calendar(date);
+  const subject = state.subjects.find(item => item.id === topic?.subjectId);
+  if (!subject || !text(topic?.id, 180) || !text(topic?.learningTopic, 300)) throw new TypeError('Wähle zuerst ein konkretes Unterrichtsthema.');
+  const id = `topic-${date}-${topic.id}`.slice(0, 200);
+  const existing = state.tasks.find(task => task.id === id);
+  if (existing && !existing.skipped) return { state, task: existing };
+  const available = weeklyLoad(state, date, getAvailability(state, date).availableMinutes).budget;
+  const committed = state.tasks.filter(task => task.date === date && !task.skipped && (task.origin === 'custom' || task.completed || task.id === state.study?.active?.taskId || task.notes?.trim() || task.selfReview?.length || hasTutorWork(state, task))).reduce((sum, task) => sum + task.minutes, 0);
+  const minutes = Math.min(25, Math.max(0, available - committed));
+  if (minutes < 5) throw new TypeError('Dein Lernfenster ist ausgefüllt. Passe zuerst deine Lernzeit an.');
+  const task = existing ? { ...existing, skipped: false, minutes: Math.min(existing.minutes, minutes) } : normalTask({ id, date, title: `${subjectLabel(subject)} · ${topic.title}`, subjectId: subject.id, category: languageKind(subject) ? 'language' : 'academics', minutes, learningTopic: topic.learningTopic,
+    objective: topic.title, expectedResult: 'Eine konkrete Aufgabe lösen und mit der Musterlösung vergleichen.', reason: 'Dein gewähltes Unterrichtsthema gezielt üben.', origin: 'custom', priority: 'high' });
+  const next = ensureDailyPlan({ ...state, tasks: [...state.tasks.filter(item => item.id !== id), task] }, date, date);
+  return { state: next, task: next.tasks.find(item => item.id === id) };
 }
 
 export function ensureDailyPlan(state, date, referenceDate = date) {
@@ -774,7 +804,10 @@ function planSignature(state, date) {
     testPlans: (testPlans || []).map(({ id, name, status, targetDate, targetScore }) => ({ id, name, status, targetDate, targetScore })),
   };
   const input = canonicalJSON({
-    engineVersion: 9, date, profile: planningProfile, subjects: state.subjects.map(({ forecast, ...subject }) => subject), grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), sat: normalizeSAT(state.sat), learning: { attempts: normalizeLearning(state.learning).attempts },
+    engineVersion: 10, date, profile: planningProfile, subjects: state.subjects.map(({ forecast, ...subject }) => subject), grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), sat: normalizeSAT(state.sat), learning: { attempts: normalizeLearning(state.learning).attempts },
+    curriculum: normalizeCurriculum(state.curriculum), recovery: normalizeRecovery(state.recovery),
+    abiturChoices: normalizeHessen(state.hessen).examinationSubjects.map(({ slot, subjectId }) => ({ slot, subjectId })),
+    confirmedSemesters: normalizeHessen(state.hessen).semesterResults.filter(result => result.status === 'confirmed'),
     universities: state.universities, activities: state.activities, events: state.events || [], schedule: state.schedule,
     roadmapConfirmed: state.roadmapCompleted,
     // A Sunday review guides the following week. Reflection text, save time,

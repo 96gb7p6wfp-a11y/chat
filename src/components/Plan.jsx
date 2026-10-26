@@ -12,6 +12,10 @@ import { subjectLabel } from '../i18n.js';
 import { getGuidedSession } from '../guided-learning.js';
 import './plan.css';
 import { CONFIRMED_Q1_EXAMS, SCHOOL_IMPORT_ID } from '../school-import.js';
+import ExamRecovery from './ExamRecovery.jsx';
+import { getExamReflection } from '../recovery.js';
+import CurriculumTopics from './CurriculumTopics.jsx';
+import HessenAbitur from './HessenAbitur.jsx';
 
 const DAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -63,7 +67,7 @@ function RoadmapPhase({ phase, onToggle, onOpenToday }) {
 }
 
 function ExamForm({ data, exam, today, onSave, onClose }) {
-  const [form, setForm] = useState({ ...exam, id: exam?.id, createdDate: exam ? exam.createdDate || data.createdDate || today : today, subjectId: exam?.subjectId || data.subjects.find((s) => s.enabled)?.id || data.subjects[0]?.id || '', title: exam?.title || '', date: exam?.date || '', time: exam?.time || '', room: exam?.room || '', topics: topicList(exam?.topics).join('\n'), format: exam?.format || 'written', target: exam?.target ?? '', importance: exam?.importance || 'normal', preparation: exam?.preparation || '', notes: exam?.notes || '' });
+  const [form, setForm] = useState({ ...exam, id: exam?.id, createdDate: exam ? exam.createdDate || data.createdDate || today : today, subjectId: exam?.subjectId || data.subjects.find((s) => s.enabled)?.id || data.subjects[0]?.id || '', title: exam?.title || '', date: exam?.date || '', time: exam?.time || '', room: exam?.room || '', semester: exam?.semester || '', topics: topicList(exam?.topics).join('\n'), format: exam?.format || 'written', target: exam?.target ?? '', importance: exam?.importance || 'normal', preparation: exam?.preparation || '', notes: exam?.notes || '' });
   const [error, setError] = useState('');
   const set = (name) => (event) => setForm((current) => ({ ...current, [name]: event.target.value }));
   if (!data.subjects.length) return <Modal title="Zuerst ein Fach hinzufügen" onClose={onClose}><EmptyState title="Ein Lernplan braucht ein Fach" description="Füge unter Profil → Fächer ein Fach hinzu. Danach kannst du die Prüfung planen." action={<Button onClick={onClose}>Verstanden</Button>} /></Modal>;
@@ -77,6 +81,7 @@ function ExamForm({ data, exam, today, onSave, onClose }) {
   return <Modal title={exam ? 'Prüfung bearbeiten' : 'Prüfung hinzufügen'} onClose={onClose}><form className="stack" onSubmit={submit}>
     <FormField label="Fach"><select value={form.subjectId} onChange={set('subjectId')} required>{data.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subjectLabel(subject)}{subject.level === 'LK' ? ' · LK' : ''}</option>)}</select></FormField>
     <FormField label="Prüfungstitel"><input value={form.title} onChange={set('title')} placeholder="Mathematik-Klausur" maxLength={150} required /></FormField>
+    <FormField label="Halbjahr · optional"><select value={form.semester} onChange={set('semester')}><option value="">Noch nicht zugeordnet</option>{['Q1', 'Q2', 'Q3', 'Q4'].map(value => <option key={value}>{value}</option>)}</select></FormField>
     <div className="form-grid"><FormField label="Prüfungsdatum"><input type="date" value={form.date} onChange={set('date')} required /></FormField><FormField label="Uhrzeit · optional"><input type="time" value={form.time} onChange={set('time')} /></FormField></div>
     <FormField label="Raum · optional"><input value={form.room} onChange={set('room')} maxLength={100} placeholder="Noch nicht bekannt" /></FormField>
     <div className="form-grid"><FormField label="Zielpunkte · optional"><input type="number" value={form.target} onChange={set('target')} min="0" max="15" step="0.5" /></FormField><FormField label="Bedeutung"><select value={form.importance} onChange={set('importance')}><option value="normal">Normal</option><option value="high">Besonders wichtig</option><option value="low">Geringer Umfang</option></select></FormField></div>
@@ -149,7 +154,7 @@ function ActivityForm({ activity, today, onSave, onClose }) {
   </form></Modal>;
 }
 
-export default function Plan({ data, today, onChange, notify, onSelectDay, onOpenProfile, initialView = 'week', initialPathway, onOpenSchoolImport, onOpenTask }) {
+export default function Plan({ onPractice, data, today, onChange, notify, onSelectDay, onOpenProfile, initialView = 'week', initialPathway, onOpenSchoolImport, onOpenTask }) {
   const [tab, setTab] = useState(initialView);
   const [week, setWeek] = useState(startOfWeek(today));
   const [selectedDay, setSelectedDay] = useState(today);
@@ -222,7 +227,7 @@ export default function Plan({ data, today, onChange, notify, onSelectDay, onOpe
       </div><Button variant="ghost" onClick={() => setTab('roadmap')}>Studienweg ansehen <ArrowRight size={15} /></Button></details>
     </div>}
 
-    {tab === 'timetable' && <Timetable data={data} today={today} onChange={onChange} notify={notify} onOpenSchoolImport={onOpenSchoolImport} />}
+    {tab === 'timetable' && <><Timetable data={data} today={today} onChange={onChange} notify={notify} onOpenSchoolImport={onOpenSchoolImport} /><details className="product-details"><summary>Meine Unterrichtsthemen</summary><CurriculumTopics onPractice={onPractice} data={data} onChange={onChange}/></details></>}
 
     {tab === 'events' && <Events data={data} today={today} onChange={onChange} notify={notify} onAddExam={() => setModal({ type: 'exam' })} onEditExam={(id) => { const exam = data.exams.find((item) => item.id === id); if (exam) setModal({ type: 'exam', exam }); }} onOpenProfile={onOpenProfile} />}
 
@@ -232,12 +237,13 @@ export default function Plan({ data, today, onChange, notify, onSelectDay, onOpe
       {exams.map(exam => { const subject = data.subjects.find(item => item.id === exam.subjectId); const { stages, scheduled, next, topics } = examPreparation(data, exam, today); const isPast = exam.date < today; const pending = stages.filter(stage => !stage.completed).length; return <section className={`card exam-card ${isPast ? 'exam-past' : ''}`} key={exam.id}>
         <div className="exam-card-heading"><div className="grow"><span className="exam-subject-label"><CalendarDays size={14} aria-hidden="true" />{subjectLabel(subject)}{subject?.level === 'LK' ? ' · LK' : ''}</span><h2>{exam.title}</h2><p className="muted small">{formatDate(exam.date, { weekday: 'short', month: 'long', day: 'numeric' })}{exam.time ? ` · ${exam.time}` : ''}{exam.room ? ` · ${exam.room}` : ''}</p></div><span className="exam-countdown">{countdownLabel(today, exam.date)}</span></div>
         {!isPast && <p className="exam-next-action"><span>{!topics.length ? 'Themen noch offen' : scheduled ? 'Heute' : 'Nächster Schritt'}</span><strong>{!topics.length ? 'Prüfungsthemen mit deinem Kurs abgleichen' : scheduled?.objective || scheduled?.title || next?.title || 'Vorbereitung abgeschlossen – leicht wiederholen'}</strong>{(scheduled || next) && topics.length > 0 && <span>{scheduled?.minutes || next?.remainingMinutes || next?.minutes} min</span>}</p>}
-        <div className="exam-card-actions"><Button variant="secondary" onClick={() => setModal({ type: 'preparation', exam })}>Vorbereitung öffnen <ArrowRight size={15} /></Button><button className="icon-button" aria-label={`${exam.title} bearbeiten`} onClick={() => setModal({ type: 'exam', exam })}><Edit3 size={17} /></button><button className="icon-button" aria-label={`${exam.title} löschen`} onClick={() => setDeleteExamId(exam.id)}><Trash2 size={17} /></button></div>
+        <div className="exam-card-actions"><Button variant="secondary" onClick={() => setModal({ type: exam.date <= today ? 'recovery' : 'preparation', exam })}>{exam.date <= today ? getExamReflection(data, exam.id)?.mood ? 'Nachbesprechung öffnen' : 'Wie lief deine Klausur?' : 'Vorbereitung öffnen'} <ArrowRight size={15} /></Button><button className="icon-button" aria-label={`${exam.title} bearbeiten`} onClick={() => setModal({ type: 'exam', exam })}><Edit3 size={17} /></button><button className="icon-button" aria-label={`${exam.title} löschen`} onClick={() => setDeleteExamId(exam.id)}><Trash2 size={17} /></button></div>
         <details className="revision-details"><summary>Vorbereitungsplan{isPast ? ' · vergangene Prüfung' : ` · ${pending} Bausteine offen`}</summary><p className="field-help">Zieltermine für deine Vorbereitung. Der Tagesplan verteilt die Arbeit nach verfügbarer Zeit.{!topics.length ? ' Vorläufig, bis deine Themen feststehen.' : ''}</p><RevisionTimeline stages={stages} />{!stages.length && <p className="muted">Noch keine Vorbereitungsschritte vorhanden.</p>}</details>
       </section>; })}
     </div>}
 
     {tab === 'roadmap' && <div className="stack"><Segmented value={country} onChange={setCountry} options={[{ value: 'USA', label: 'USA' }, { value: 'Germany', label: 'Deutschland' }]} /><p className="muted">{country === 'USA' ? 'Stärke deine Noten, dokumentiere Erfahrungen und recherchiere passende Hochschulen. Zulassung und Testanforderungen unterscheiden sich je Hochschule.' : 'Bereite dein Abitur vor und prüfe Studiengänge, Zulassungsregeln und Unterlagen für jede Hochschule.'}</p>
+      {country === 'Germany' && <HessenAbitur data={data} today={today} onChange={onChange} notify={notify}/>}
       <p className="field-help">Deine täglichen Schritte bauen aufeinander auf. Bestätige einen Meilenstein, wenn du ihn erreicht hast.</p>
       <div className="roadmap-timeline">{phases.map((phase) => <RoadmapPhase key={phase.id} phase={phase} onToggle={(id) => onChange((current) => toggleRoadmapItem(current, id))} onOpenToday={() => onSelectDay(today)} />)}</div>
       <details className="product-details"><summary>Termine und Anforderungen</summary><p className="field-help">Die Zeitachse enthält Planungsziele. Prüfe Fristen und Anforderungen auf den offiziellen Hochschulseiten. UCLA und UC Berkeley berücksichtigen SAT/ACT nicht für die Zulassung. NC und Hochschulstart hängen vom Studiengang ab.</p></details>
@@ -249,6 +255,7 @@ export default function Plan({ data, today, onChange, notify, onSelectDay, onOpe
       {scheduleError && <p className="form-error" role="alert">{scheduleError}</p>}
     </div>}
 
+    {modal?.type === 'recovery' && <Modal title="Deine Klausur" onClose={() => setModal(null)}><ExamRecovery data={data} exam={data.exams.find(exam => exam.id === modal.exam.id) || modal.exam} today={today} onChange={onChange}/></Modal>}
     {modal?.type === 'preparation' && <ExamPreparation data={data} exam={modal.exam} today={today} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'exam', exam: modal.exam })} onToday={() => { setModal(null); onSelectDay(today); }} onLearn={onOpenTask ? task => { setModal(null); onOpenTask(task); } : undefined} />}
     {modal?.type === 'exam' && <ExamForm key={modal.exam?.id || 'new'} data={data} exam={modal.exam} today={today} onClose={() => setModal(null)} onSave={(exam) => { onChange((current) => saveExam(current, exam)); setModal(null); notify?.('Prüfung gespeichert. Dein Lernplan wurde angepasst.'); }} />}
     {modal?.type === 'activity' && <ActivityForm activity={modal.activity} today={today} onClose={() => setModal(null)} onSave={saveFixedActivity} />}

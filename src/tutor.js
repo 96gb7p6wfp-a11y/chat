@@ -1,4 +1,6 @@
 /** Small, authored practice units. Matching a topic never invents a syllabus. */
+import { getCurrentLearningTopics } from './curriculum.js';
+import { RECOVERY_TUTOR_UNITS } from './recovery.js';
 const clean = (value, max = 5000) => typeof value === 'string' ? value.trim().slice(0, max) : '';
 const answerText = (value, max = 5000) => typeof value === 'string' ? value.slice(0, max) : '';
 const stamp = value => typeof value === 'string' && value.includes('T') && Number.isFinite(Date.parse(value)) ? value : null;
@@ -31,6 +33,7 @@ const resources = {
 };
 const q = (id, prompt, solution, explanation, extra = {}) => ({ id, prompt, solution, explanation, kind: 'text', ...extra });
 const UNITS = [
+  ...RECOVERY_TUTOR_UNITS,
   {
     id: 'english-civil-rights-brown', subjectId: 'english', title: 'Civil Rights · Brown v. Board of Education', description: 'Entscheidung, Verfassungsgrund und historische Wirkung erklären.', match: /civil.?rights|bürgerrecht|brown\s*(v\.?|versus)?\s*board|segregation|desegregation/,
     objective: 'Die Entscheidung von 1954 in drei klaren englischen Antworten erklären.',
@@ -115,6 +118,18 @@ const UNITS = [
       q('german-evidence', 'Formuliere eine Deutung zu Maras Unsicherheit und stütze sie mit einem kurzen, wörtlichen Beleg.', 'Maras widersprüchliche Bewegungen legen Unsicherheit nahe: Sie streicht den Zettel zunächst glatt und faltet ihn dann „kleiner als zuvor“. Das kann als Wechsel zwischen dem Wunsch zu sprechen und dem Rückzug davor gelesen werden.', 'Nenne nicht bloß ein Gefühl. Verbinde eine konkrete Handlung mit einer nachvollziehbaren Deutung. Der Text beweist keine bestimmte Vorgeschichte.', { criteria: ['Aufgabenbezug erkennbar?', 'Beleg wörtlich korrekt?', 'Deutung aus der Handlung hergeleitet?'], hint: 'Die Handlung … legt … nahe, weil … .' }),
       q('german-paragraph', 'Schreibe einen Analyseabsatz von etwa 80–120 Wörtern: Wie zeigt der Text Maras Zögern? Erkläre die Wirkung mindestens eines Belegs.', 'Maras Zögern wird durch gegensätzliche Bewegungen sichtbar. Sie streicht den Zettel zunächst glatt, faltet ihn anschließend aber „kleiner als zuvor“. Dieser Wechsel lässt sich als Spannung zwischen dem Wunsch, ihr Anliegen vorzubringen, und dem Rückzug davor lesen. Die Formulierung „nur kurz“ schwächt die Bedeutung ihres Besuchs zusätzlich ab. Mara spielt ihr Anliegen dadurch sprachlich herunter. Dass sie den Zettel am Ende in der Hand behält, lässt die Entscheidung offen. Die Szene zeigt damit Unsicherheit, ohne die Gründe dafür ausdrücklich zu erklären.', 'Dies ist eine mögliche textnahe Deutung. Stilmittel müssen mit ihrer konkreten Funktion erklärt werden. Prüfe außerdem Verbposition, Kommas und ungenaue Wörter.', { criteria: ['Deutung statt Nacherzählung?', 'Kurzer Beleg in den eigenen Satz eingebaut?', 'Wirkung mit „weil“ oder vergleichbarer Begründung erklärt?', 'Keine unbelegte Vorgeschichte erfunden?', 'Satzbau und Kommas kontrolliert?'], followUp: 'Überarbeite deinen allgemeinsten Satz so, dass er sich auf ein bestimmtes Wort oder eine Handlung bezieht.' }),
     ], reviewPrompt: 'Schreibe deinen schwächsten Erklärungssatz ohne Musterlösung erneut. Markiere darin Beleg und Deutung.',
+  },
+  {
+    id: 'german-classicism-humanity', subjectId: 'german', title: 'Weimarer Klassik · Humanität im Analyseabsatz', description: 'An einer selbst verfassten Szene eine moralische Entscheidung deuten.', match: /weimarer klassik|humanitätsideal|humanitaetsideal|^klassik$/,
+    objective: 'Eine Deutung zu Humanität mit einem Textbeleg und einer Erklärung absichern.',
+    explanation: 'Die Weimarer Klassik verbindet die Frage nach menschlicher Würde mit der bewussten Gestaltung von Gefühl und Vernunft. Das ist ein historischer Deutungsrahmen, kein Beweis, dass jeder klassische Text dieselbe Botschaft hat. Prüfe deine Deutung am Wortlaut. Ein Analyseabsatz enthält eine Aussage, einen kurzen Beleg und eine Erklärung seiner Wirkung.',
+    passage: 'Eigene Übungsszene, kein historischer Originaltext: Die Richterin hielt das Urteil bereits in der Hand. Vor ihr stand ein Bote, der das Gesetz gebrochen hatte, um ein verletztes Kind zu retten. Sie legte das Blatt auf den Tisch. „Ich werde die Tat prüfen“, sagte sie, „und den Menschen dabei nicht übersehen.“',
+    materialLabel: 'Selbst verfasste Lernszene · kein vorgeschriebener Abiturtext',
+    questions: [
+      q('classic-conflict', 'Welcher Konflikt zwischen zwei Handlungsmaßstäben entsteht in der Szene? Nenne beide und belege einen am Text.', 'Die Richterin muss die Durchsetzung des Gesetzes gegen die Berücksichtigung des menschlichen Notfalls abwägen. Der Bote hat „das Gesetz gebrochen“, wollte aber „ein verletztes Kind […] retten“.', 'Die Antwort benennt Gesetzestreue und menschliche Fürsorge. Eine bloße Inhaltsangabe würde die konkurrierenden Maßstäbe noch nicht herausarbeiten.', { criteria: ['Zwei unterschiedliche Maßstäbe benennen.', 'Mindestens einen kurzen, genauen Textbeleg verwenden.'] }),
+      q('classic-analysis', 'Schreibe 70–100 Wörter: Deute das Ablegen des Urteils und die direkte Rede. Verbinde Aussage, Beleg und Erklärung; unterscheide Deutung und sichere Textinformation.', 'Das Ablegen des Urteils kann als Unterbrechung eines vorschnellen, rein formalen Entscheids gelesen werden. Die Richterin will „die Tat prüfen“ und zugleich „den Menschen […] nicht übersehen“. Die Gegenüberstellung verbindet rechtliche Verantwortung mit einer humanen Betrachtung des Einzelfalls. Ihre direkte Rede macht diese bewusste Selbstverpflichtung hörbar. Die Szene lässt sich daher mit einem Humanitätsideal verbinden; dass das spätere Urteil gerecht sein wird, ist damit noch nicht bewiesen.', 'Das Modell zeigt einen möglichen Aufbau. Andere textnahe Deutungen sind möglich. Die historische Zuordnung bleibt ein Vergleichsrahmen und darf nicht als bewiesene Entstehungsepoche der erfundenen Szene ausgegeben werden.', { criteria: ['Eine deutliche Deutung formulieren.', 'Handlung und direkte Rede untersuchen.', 'Wirkung der Textgestaltung erklären.', 'Keine unbelegte Behauptung über das spätere Urteil.'], followUp: 'Ersetze eine allgemeine Wertung wie „gut“ durch eine genaue Erklärung der Textgestaltung.' }),
+      q('classic-limit', 'Warum wäre „Die Szene ist ein Werk von Goethe“ eine unzulässige Schlussfolgerung?', 'Die Szene wurde für diese Übung verfasst. Ein ähnliches Motiv oder ein historischer Deutungsrahmen belegt weder Autor noch Epoche.', 'Motivvergleich und Quellenbestimmung sind verschiedene Aufgaben. Behaupte Autor und Entstehungszeit nur bei einer zuverlässigen Quellenangabe.'),
+    ], reviewPrompt: 'Formuliere deine Deutung noch einmal in einem Satz und ergänze genau einen Beleg mit Wirkungserklärung.',
   },
   {
     id: 'german-argumentation', subjectId: 'german', title: 'Deutsch · Präzise argumentieren', description: 'Behauptung, Begründung und Beispiel verständlich verbinden.', match: /^(?:de-comment|argumentation|argument|erörterung|eroerterung|stellungnahme|satzbau|grammatik|komma|kommasetzung)$/,
@@ -282,6 +297,7 @@ export function getTutorSession(data = {}, task = {}, today = task.date, selecte
     const unit = resolveTutorTopic(subjectId, selected);
     return unit ? materialize(unit, data, task, today, 'selection', exam) : unavailable('unsupported', `Für „${selected}“ gibt es noch kein geprüftes Übungsmodul. Wähle ein verfügbares Thema oder nutze dein Unterrichtsmaterial.`, selected);
   }
+  if (/^recovery-/.test(task.revisionStage || '') && subjectId !== 'english') return unavailable(choices.length ? 'choose-topic' : 'unsupported', 'Für dieses Fach ist die Diagnose aus dem Klausurfeedback noch nicht als eigene Übung umgesetzt. Wähle ein konkretes Fehlerthema; die App erfindet keine Ursache.');
   // New persisted unit IDs represent a concrete earlier choice, including a
   // scheduled review. Legacy generic labels such as en-analysis do not.
   const exact = UNITS.find(unit => unit.subjectId === subjectId && unit.id === task.learningTopic);
@@ -297,6 +313,21 @@ export function getTutorSession(data = {}, task = {}, today = task.date, selecte
     return known[0] ? materialize(known[0], data, task, today, 'exam', exam) : unavailable('unsupported', `Für deine gespeicherten Themen „${examTopics.join(', ')}“ ist noch kein passendes Übungsmodul vorhanden.`, examTopics.join(', '));
   }
   const subjectRecord = data.subjects?.find(item => item.id === task.subjectId);
+  // A deliberate topic session is more specific than the subject's other
+  // current topics. Never swap the requested exercise for a different lesson.
+  if (task.origin === 'custom' && task.id?.startsWith('topic-') && task.learningTopic) {
+    const requested = resolveTutorTopic(subjectId, task.learningTopic);
+    return requested ? materialize(requested, data, task, today, 'selection', exam) : unavailable('unsupported', `Für dein ausdrücklich gewähltes Thema „${task.learningTopic}“ fehlt noch eine konkrete interaktive Übung.`, task.learningTopic);
+  }
+  const currentTopics = getCurrentLearningTopics(data, task.subjectId);
+  if (currentTopics.length) {
+    const matchingTask = currentTopics.find(topic => topic.learningTopic === task.learningTopic);
+    const active = matchingTask ? [matchingTask] : currentTopics;
+    const mapped = active.map(topic => resolveTutorTopic(subjectId, topic.learningTopic));
+    const known = [...new Map(mapped.filter(Boolean).map(unit => [unit.id, unit])).values()];
+    if (active.length > 1 && (known.length !== 1 || mapped.some(unit => !unit))) return { ...unavailable('choose-topic', 'Wähle einen deiner aktuellen Unterrichtsbereiche. Nicht abgedeckte Themen bleiben als offen gekennzeichnet.'), choices: [...known.map(unit => ({ id: unit.id, label: unit.title, title: unit.title, description: unit.description })), ...choices.filter(choice => !known.some(unit => unit.id === choice.id))] };
+    return known[0] ? materialize(known[0], data, task, today, 'curriculum', exam) : unavailable('unsupported', `Für dein gewähltes Thema „${active.map(topic => topic.title).join(', ')}“ fehlt noch eine konkrete interaktive Übung.`, active[0].learningTopic);
+  }
   const topics = Array.isArray(subjectRecord?.weakTopics) ? subjectRecord.weakTopics.filter(item => typeof item === 'string') : [];
   const concreteTaskTopic = /math-exponential|physics-rc/i.test(task.learningTopic || '') ? task.learningTopic : '';
   const explicitTask = task.origin === 'custom' ? `${task.title || ''} ${task.learningTopic || ''}` : '';

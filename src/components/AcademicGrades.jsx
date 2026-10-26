@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import CurriculumTopics from './CurriculumTopics.jsx';
+import SemesterEstimate from './SemesterEstimate.jsx';
+import { CourseRequirements } from './HessenAbitur.jsx';
 import { ArrowRight, ChevronRight, Pencil, Plus, Settings2, Trash2 } from 'lucide-react';
 import { Button, EmptyState, Field, Modal, SectionHeading } from './UI.jsx';
 import { addGrade, removeGrade } from '../coach.js';
@@ -104,7 +107,7 @@ function Forecast({ analysis, nextExam, scope, onSave, onGrade, onSettings }) {
   </section>;
 }
 
-function SubjectDetail({ data, today, subjectId, onClose, onGrade, onSettings, onDelete, onForecast }) {
+function SubjectDetail({ data, today, subjectId, onChange, onPractice, onClose, onGrade, onSettings, onDelete, onForecast }) {
   const [semester, setSemester] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
   const analysis = calculateSubject(data, subjectId, semester);
@@ -118,6 +121,9 @@ function SubjectDetail({ data, today, subjectId, onClose, onGrade, onSettings, o
     <p className="grade-estimate-caption">{analysis.source === 'baseline' ? 'Undatierte Orientierung. Noch kein berechneter Schnitt aus Einzelleistungen.' : `${analysis.records.length} datierte Leistung${analysis.records.length === 1 ? '' : 'en'} · ${analysis.methodLabel} · Keine bestätigte Kursnote.`}</p>
     <GradeSparkline records={analysis.records} target={analysis.target}/>
     <Forecast key={`${subjectId}-${scope}`} analysis={analysis} nextExam={nextExam} scope={scope} onSave={onForecast} onGrade={onGrade} onSettings={onSettings}/>
+    <details className="product-details"><summary>Halbjahresziel & Mitarbeit</summary><SemesterEstimate data={data} subjectId={subjectId} semester={SEMESTERS.includes(scope) ? scope : data.profile.schoolYear} onChange={onChange}/></details>
+    <details className="product-details"><summary>Aktuelle Unterrichtsthemen</summary><CurriculumTopics onPractice={onPractice} data={data} onChange={onChange} subjectId={subjectId} semester={SEMESTERS.includes(scope) ? scope : data.profile.schoolYear}/></details>
+    <CourseRequirements data={data} subjectId={subjectId} semester={SEMESTERS.includes(scope) ? scope : data.profile.schoolYear} onChange={onChange}/>
     <details className="product-details grade-evidence"><summary>Was kann ich gezielt verbessern?</summary><div className="stack compact">
       {evidence.contrast && <p className="grade-evidence-comparison">Schriftlich <strong>{points(evidence.contrast.written)}</strong> · mündlich <strong>{points(evidence.contrast.oral)}</strong> Punkte. {Math.abs(evidence.contrast.difference) >= .5 ? `${evidence.contrast.difference > 0 ? 'Die schriftlichen' : 'Die mündlichen'} Ergebnisse liegen in deinen erfassten Leistungen niedriger. Wie stark eine Verbesserung wirkt, hängt von deiner Gewichtung ab.` : 'Die erfassten Ergebnisse liegen nah beieinander.'}</p>}
       {!!subject.weakTopics?.length && <p><span className="field-help">Von dir genannte Themen</span><br/>{subject.weakTopics.join(' · ')}</p>}
@@ -139,7 +145,7 @@ function SubjectDetail({ data, today, subjectId, onClose, onGrade, onSettings, o
   </div></Modal>;
 }
 
-export default function AcademicGrades({ data, today, onChange, notify, onOpenProfile, initialSubjectId = '' }) {
+export default function AcademicGrades({ data, today, onChange, notify, onOpenProfile, initialSubjectId = '', onPractice }) {
   const [selected, setSelected] = useState(data.subjects.some(subject => subject.id === initialSubjectId) ? initialSubjectId : null);
   const [entry, setEntry] = useState(null);
   const [settings, setSettings] = useState(false);
@@ -154,7 +160,7 @@ export default function AcademicGrades({ data, today, onChange, notify, onOpenPr
     <div className="academic-overview"><div><span className="field-help">Mein Kursschnitt</span><strong>{points(overview.average)}<small> / 15</small></strong></div><div><span className="field-help">Mein Ziel</span><strong>{points(overview.target)}</strong></div>{overview.gap !== null && <p className="muted small">{overview.gap > 0 ? `${points(overview.gap)} Punkte bis zu deinem Ziel` : 'Aktueller Schnitt auf Zielniveau'}</p>}</div>
     <p className="field-help">{overview.subjectCount} von {overview.totalSubjects} Fächern mit bekannten Werten. {overview.weighted ? 'Deine Kursgewichte gelten.' : 'Alle Kurse zählen gleich.'}{overview.includesBaselines ? ' Enthält undatierte Ausgangswerte.' : ''} Keine offizielle Abiturnote.</p>
     {subjects.length ? <div className="academic-subjects">{subjects.map(value => { const analysis = calculateSubject(data, value.id); const latest = [...analysis.records].sort((a, b) => b.date.localeCompare(a.date))[0]; return <button className="academic-subject-row" type="button" key={value.id} onClick={() => setSelected(value.id)} aria-label={`${subjectLabel(value)}: Noten und Ziel berechnen`}><div className="grow"><strong>{subjectLabel(value)}{value.level === 'LK' && <span className="academic-lk">LK</span>}</strong><p>{latest ? `Zuletzt ${points(latest.points)} / 15 · ${GRADE_LABELS[latest.type]}` : analysis.source === 'baseline' ? 'Ausgangswerte · Datum offen' : 'Noch keine Ergebnisse'}</p><span className="academic-analysis-link">Zielrechnung öffnen</span></div><div className="academic-row-points"><span>{analysis.source === 'baseline' ? 'Ausgangswert' : analysis.average === null ? 'Schnitt offen' : 'Schnitt'}</span><strong>{points(analysis.average)}</strong><span>Ziel {points(analysis.target)}</span>{analysis.source === 'assessments' && analysis.average !== null && <span className="subject-point-bar" aria-hidden="true"><i style={{ width: `${analysis.average / 15 * 100}%` }}/>{analysis.target !== null && <b style={{ left: `${analysis.target / 15 * 100}%` }}/>}</span>}</div><ChevronRight size={16} /></button>; })}</div> : <EmptyState title="Deine Fächer fehlen noch" description="Ergänze deine Fächer, damit dein Lernplan gezielt auf deine Ziele eingehen kann." action={onOpenProfile && <Button onClick={() => onOpenProfile('Subjects')}>Fächer hinzufügen</Button>} />}
-    {selected && subject && !entry && !settings && <SubjectDetail data={data} today={today} subjectId={selected} onClose={() => setSelected(null)} onGrade={record => setEntry({ subjectId: selected, record })} onSettings={() => setSettings(true)} onForecast={forecast => onChange(current => ({ ...current, subjects: current.subjects.map(value => value.id === selected ? { ...value, forecast } : value) }))} onDelete={record => { onChange(current => removeGrade(current, record.id)); notify?.('Note gelöscht. Deine übrigen Ergebnisse bleiben erhalten.'); }} />}
+    {selected && subject && !entry && !settings && <SubjectDetail onPractice={onPractice} data={data} today={today} subjectId={selected} onChange={onChange} onClose={() => setSelected(null)} onGrade={record => setEntry({ subjectId: selected, record })} onSettings={() => setSettings(true)} onForecast={forecast => onChange(current => ({ ...current, subjects: current.subjects.map(value => value.id === selected ? { ...value, forecast } : value) }))} onDelete={record => { onChange(current => removeGrade(current, record.id)); notify?.('Note gelöscht. Deine übrigen Ergebnisse bleiben erhalten.'); }} />}
     {entry && <GradeEntry data={data} today={today} subjectId={entry.subjectId} record={entry.record} onClose={() => setEntry(null)} onSave={save} />}
     {settings && subject && <GradeSettings subject={subject} overallTarget={data.profile.targetAverage} onClose={() => setSettings(false)} onSave={(patch, targetAverage) => { onChange(current => ({ ...current, subjects: current.subjects.map(value => value.id === subject.id ? { ...value, ...patch } : value), profile: { ...current.profile, targetAverage } })); setSettings(false); notify?.('Notenberechnung und Ziele gespeichert.'); }} />}
   </section>;

@@ -15,6 +15,7 @@ export default defineConfig({
       output: { manualChunks: id => {
         if (id.includes('/node_modules/')) return 'vendor';
         if (/\/src\/(?:practice-bank|exercises|tutor)\.js$/.test(id)) return 'practice';
+        if (/\/src\/(?:hessen|curriculum|semester-grades|grades|recommendations)\.js$/.test(id)) return 'academics';
         if (/\/src\/roadmap\.js$/.test(id)) return 'roadmap';
       } },
     },

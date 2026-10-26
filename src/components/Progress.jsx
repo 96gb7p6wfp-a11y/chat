@@ -4,6 +4,7 @@ import { Modal, Button, EmptyState, SectionHeading, formatMinutes } from './UI.j
 import { getDailyPlan, getProgress, getWeeklyReview, saveWeeklyReview, shiftDate, startOfWeek } from '../coach.js';
 import { getStudyStats, removeStudySession } from '../study.js';
 import AcademicGrades from './AcademicGrades.jsx';
+import HessenAbitur from './HessenAbitur.jsx';
 import { getIELTSSummary } from '../ielts.js';
 import { getSATSummary } from '../sat.js';
 import { subjectLabel } from '../i18n.js';
@@ -75,7 +76,7 @@ function ReviewForm({ data, review, previous, onSave, onClose }) {
   </form></Modal>;
 }
 
-export default function Progress({ data, today, onChange, notify, onOpenPlan, onOpenProfile, initialSubjectId = '' }) {
+export default function Progress({ data, today, onChange, notify, onOpenPlan, onOpenProfile, initialSubjectId = '', onPractice }) {
   const [week, setWeek] = useState(startOfWeek(today));
   const [modal, setModal] = useState(null);
   const progress = getProgress(data, today);
@@ -92,7 +93,8 @@ export default function Progress({ data, today, onChange, notify, onOpenPlan, on
   return <div className="screen progress-screen">
     <header className="page-header"><p className="page-kicker">DEINE ENTWICKLUNG</p><h1 className="page-title">Fortschritt</h1></header>
     <div className="stack">
-      <AcademicGrades initialSubjectId={initialSubjectId} data={data} today={today} onChange={onChange} notify={notify} onOpenProfile={onOpenProfile} />
+      <AcademicGrades onPractice={onPractice} initialSubjectId={initialSubjectId} data={data} today={today} onChange={onChange} notify={notify} onOpenProfile={onOpenProfile} />
+      <HessenAbitur data={data} today={today} onChange={onChange} notify={notify}/>
       <section className="card"><div className="week-heading row"><button className="icon-button" aria-label="Vorherige Fortschrittswoche" onClick={() => setWeek((value) => shiftDate(value, -7))}><ChevronLeft size={20} /></button><div className="grow text-center"><h2>{week === currentWeek ? 'Diese Woche' : 'Deine Woche'}</h2><p className="muted small">{formatDate(review.weekStart, { month: 'short', day: 'numeric' })} – {formatDate(review.weekEnd, { month: 'short', day: 'numeric' })}</p></div><button className="icon-button" aria-label="Nächste Fortschrittswoche" disabled={week >= currentWeek} onClick={() => setWeek((value) => shiftDate(value, 7))}><ChevronRight size={20} /></button></div>
         <div className="stats-grid"><div className="stat"><span className="metric">{percent(review.completionRate)}<small>%</small></span><span className="muted">Erledigt</span><span className="field-help">{review.completed} / {review.total} Aufgaben</span></div><div className="stat"><span className="metric">{formatMinutes(review.minutes)}</span><span className="muted">Geplante Lernzeit</span><span className="field-help">Aus erledigten Aufgaben</span></div><div className="stat"><span className="metric">{review.consistency}<small>/7</small></span><span className="muted">Lerntage</span><span className="field-help">Tage mit Lernaktivität</span></div></div>
         <div className="consistency-strip" aria-label="Lernaktivität pro Tag">{review.days.map((day) => <div className="consistency-day" key={day.date} title={`${formatDate(day.date, { weekday: 'long' })}: ${day.completed} erledigte Aufgaben · ${formatStudyTime(day.timedSeconds || 0)} gemessene Lernzeit`}><span className={`consistency-dot ${day.completed > 0 || day.timedSeconds > 0 ? 'completed' : ''} ${day.date === today ? 'is-today' : ''}`}>{day.completed > 0 ? <Check size={13} /> : day.timedSeconds > 0 ? <Clock3 size={13}/> : null}</span><span className="field-help">{dateObject(day.date).toLocaleDateString('de-DE', { weekday: 'short' })}</span></div>)}</div>

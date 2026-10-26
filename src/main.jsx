@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowRight, CalendarDays, Check, Compass, Plus, Sun, TrendingUp, UserRound } from 'lucide-react';
-import { addTask, ensureDailyPlan, getDailyPlan, localDateKey, normalizeData, removeTask, saveSchedule, saveTaskNotes, saveTaskReview, shiftDate, skipTask, toggleTask, moveTask, editTask, replaceTask } from './coach.js';
+import { addTask, ensureDailyPlan, getDailyPlan, localDateKey, normalizeData, removeTask, saveSchedule, saveTaskNotes, saveTaskReview, shiftDate, skipTask, toggleTask, moveTask, editTask, replaceTask, startTopicPractice } from './coach.js';
 import Today from './components/Today.jsx';
 import GuidedLearning from './components/GuidedLearning.jsx';
 import { subjectLabel, categoryLabel } from './i18n.js';
@@ -85,6 +85,10 @@ function App() {
   function update(updater) { setData(current => ensureDailyPlan(typeof updater === 'function' ? updater(current) : updater,selectedDay,today)); }
   function navigate(next) { if (next !== 'progress') setProgressSubjectId(''); setTab(next); location.hash = next; window.scrollTo({top:0,behavior:'instant'}); }
   function openProgress(subjectId = '') { setProgressSubjectId(data.subjects.some(subject => subject.id === subjectId) ? subjectId : ''); navigate('progress'); }
+  function practiceTopic(topic) {
+    try { const next = startTopicPractice(data, topic, today); setData(next.state); setSelectedDay(today); navigate('today'); setModal({ type: 'task', id: next.task.id }); }
+    catch (error) { notify(error.message || 'Dieses Thema konnte noch nicht eingeplant werden.'); }
+  }
   function chooseDay(date) { setSelectedDay(date); setData(current => ensureDailyPlan(current,date,today)); navigate('today'); }
   function completeTask(task) { if (task.date > today) { notify('Künftige Aufgaben sind eine Vorschau. Schließe sie am jeweiligen Tag ab.'); return; } const now = new Date(); update(current => toggleTask(current.study?.active?.taskId === task.id ? finishStudy(current,now) : current,task.id,now)); if (!task.completed) notify('Geschafft. Dein Fortschritt ist gespeichert.'); }
   function finishSetup(next) { setData(ensureDailyPlan(normalizeData(next,today),today)); setSelectedDay(today); setSetupOpen(false); navigate('today'); notify(next.demo ? 'Der Beispielplan ist bereit. Du kannst jederzeit eigene Angaben eintragen.' : 'Dein Lernplan ist bereit. Beginne mit dem ersten Schritt.'); }
@@ -129,13 +133,13 @@ function App() {
       <header className="mobile-brand"><a className="brand" href="#today" onClick={() => navigate('today')}><Compass size={21} strokeWidth={1.7}/><span>Northstar</span></a><span>{data.profile.schoolYear} · Abitur {data.profile.graduationYear}</span></header>
       {storageMessage && <div className="storage-notice" role="alert"><p>{storageMessage}</p><button onClick={exportData}>Sicherung exportieren</button>{boot.recoveryKey && <button onClick={() => downloadOriginal(boot.recoveryKey)}>Originaldaten herunterladen</button>}</div>}
       {data.demo && !setupOpen && <div className="demo-banner"><span>Beispielplan · eigene Angaben eintragen</span><button onClick={() => setSetupOpen(true)}>Einrichten <ArrowRight size={14}/></button></div>}
-      {tab === 'today' && <Today data={data} today={today} date={selectedDay} plan={dailyPlan}
+      {tab === 'today' && <Today data={data} today={today} date={selectedDay} plan={dailyPlan} onChange={update}
         onOpenTask={task => setModal({type:'task',id:task.id})} onComplete={completeTask}
         onTime={() => setModal({type:'time'})} onAdd={() => setModal({type:'addTask'})}
         onPlan={showPlan} onProgress={openProgress} onProfile={openProfile}
         onPurpose={() => setModal({type:'purpose'})} onChooseDay={chooseDay}/>}
-      {tab === 'plan' && <Plan data={data} today={today} initialView={planView} initialPathway={planPathway || data.profile.pathways[0]} onChange={update} notify={notify} onSelectDay={chooseDay} onOpenProfile={openProfile} onOpenTask={task => setModal({type:'task',id:task.id})} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
-      {tab === 'progress' && <Progress key={progressSubjectId || 'overview'} initialSubjectId={progressSubjectId} data={data} today={today} onChange={update} notify={notify} onOpenPlan={showPlan} onOpenProfile={openProfile} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
+      {tab === 'plan' && <Plan onPractice={practiceTopic} data={data} today={today} initialView={planView} initialPathway={planPathway || data.profile.pathways[0]} onChange={update} notify={notify} onSelectDay={chooseDay} onOpenProfile={openProfile} onOpenTask={task => setModal({type:'task',id:task.id})} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
+      {tab === 'progress' && <Progress onPractice={practiceTopic} key={progressSubjectId || 'overview'} initialSubjectId={progressSubjectId} data={data} today={today} onChange={update} notify={notify} onOpenPlan={showPlan} onOpenProfile={openProfile} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
       {tab === 'profile' && <Profile key={profileSection} initialSection={profileSection} data={data} today={today} onChange={update} notify={notify} onRestartSetup={() => setSetupOpen(true)} onExport={exportData} onImport={() => importRef.current?.click()} onOpenSchedule={() => showPlan('schedule')} onOpenProgress={() => openProgress()} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
     </main>
     <nav className="bottom-nav" aria-label="Hauptnavigation mobil">{NAV.map(({id,label,icon:Icon}) => <button key={id} onClick={() => navigate(id)} aria-current={tab === id ? 'page' : undefined} className={tab === id ? 'active' : ''}><Icon size={22} strokeWidth={tab === id ? 2 : 1.6}/><span>{label}</span></button>)}</nav>

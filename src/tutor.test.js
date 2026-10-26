@@ -183,3 +183,10 @@ test('saved stepwise sessions preserve answers, review drafts, checks and timest
   assert.equal(state.learning.sessions[0].completedAt, null);
   assert.equal(state.tasks, undefined);
 });
+
+test('a deliberate topic session never changes to a different active subject topic', () => {
+  const data = { profile: { schoolYear: 'Q1' }, subjects: [{ id: 'physics', name: 'Physics' }], curriculum: { selections: [{ id: 'qa-current', subjectId: 'physics', semester: 'Q1', topicId: 'provided-physics-q1-entladen', status: 'class', examRelevant: false }], customTopics: [] } };
+  const result = getTutorSession(data, { id: 'topic-2026-10-26-magnetic', origin: 'custom', subjectId: 'physics', category: 'academics', learningTopic: 'Magnetisches Feld', title: 'Physik · Magnetisches Feld', minutes: 20 }, '2026-10-26');
+  assert.equal(result.status, 'unsupported');
+  assert.equal(result.unitId, '');
+});

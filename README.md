@@ -53,6 +53,19 @@ exam subjects are enabled for planning. No exam topics, times or rooms are inven
 The supplied German 4/15 result is an unconfirmed grade-entry draft until its
 assessment type, date and weight have been supplied. It is not a final course grade.
 
+## Hessen 2028 scenarios and post-exam recovery
+
+Open **Fortschritt → Mein Abitur 2028** for separate semester results and selected
+Block I/II scenarios. Course-hour assessment plans, explicit classroom-performance
+scenarios, current Q1/Q2 topic selection and post-exam recovery are integrated
+with the same daily study allowance. See [the implementation and source status](docs/hessen-2028.md).
+
+**Official verification remains incomplete:** the managed network blocks the
+mandatory Hessen sources. The supplied topic fields and general count rules are
+labelled provisional. This release cannot certify official course inclusion,
+examination eligibility or passing, and does not claim the complete ten-subject
+official Q1/Q2 catalogue or verified 2028 examination dates.
+
 ## Academic intelligence
 
 Grades use the German upper-secondary **0–15 point** scale; zero is valid.
@@ -105,9 +118,10 @@ a saved mistake and completion. Answers and position autosave independently of
 older notes. Reviewing or changing priorities does not discard started work.
 Existing reflections remain accessible in a collapsed history.
 
-Seventeen authored modules cover four English topics (including Brown v. Board
-of Education), three Mathematics topics, two German writing tasks with original
-texts, two Physics topics, all four IELTS skills, and two SAT skills. Each has
+Twenty-five authored modules cover four English topics (including Brown v. Board
+of Education), seven English recovery/diagnostic units, three Mathematics topics,
+three German writing/interpretation tasks with original practice texts, two
+Physics topics, all four IELTS skills, and two SAT skills. Each has
 actual questions, solutions, explanations and a review. Short sessions reduce
 quantity; they do not falsely claim a full exam. IELTS Listening uses a device
 English speech voice, is labelled synthetic practice, and explains when audio is
@@ -178,6 +192,7 @@ Then run the current browser suite in another terminal:
 python3 tests/coach_upgrade_browser.py --url http://127.0.0.1:4176
 python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
 python3 tests/personal_tutor_browser.py --url http://127.0.0.1:4176
+python3 tests/hessen_browser.py --url http://127.0.0.1:4176
 python3 tests/responsive_browser.py --url http://127.0.0.1:4176
 ```
 

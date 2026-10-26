@@ -579,3 +579,8 @@
     transition:none!important
   }
 }
+.post-exam-prompt { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); }
+.post-exam-prompt > div { min-width:0; flex:1; display:grid; gap:4px; }
+.post-exam-prompt strong { font-size:.9rem; }
+.post-exam-prompt span { color:var(--muted); font-size:.8rem; }
+@media(max-width:430px) { .post-exam-prompt { align-items:stretch; flex-direction:column; } .post-exam-prompt .button { align-self:flex-start; } }

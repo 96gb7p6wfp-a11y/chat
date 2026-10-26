@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowRight, BookOpen, BriefcaseBusiness, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Code2, GraduationCap, Languages, Plus, Target, Trophy } from 'lucide-react';
 import { getAcademicOverview } from '../grades.js';
 import { getSubjectPriorities } from '../recommendations.js';
 import { getUpcomingEvents } from '../events.js';
 import { getGuidedSession } from '../guided-learning.js';
 import { subjectLabel, categoryLabel, pointLabel } from '../i18n.js';
-import { Button, EmptyState, formatDate, formatMinutes } from './UI.jsx';
+import { Button, EmptyState, Modal, formatDate, formatMinutes } from './UI.jsx';
+import ExamRecovery from './ExamRecovery.jsx';
+import { getExamReflection } from '../recovery.js';
 import './today.css';
 
 const dayDistance = (from, to) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000);
@@ -52,7 +54,10 @@ function longTermPriority(priorities, data) {
   return [...priorities].sort((a, b) => value(b) - value(a))[0];
 }
 
-export default function Today({ data, today, date, plan, onOpenTask, onComplete, onTime, onAdd, onPlan, onProgress, onProfile, onPurpose, onChooseDay }) {
+export default function Today({ data, today, date, plan, onChange, onOpenTask, onComplete, onTime, onAdd, onPlan, onProgress, onProfile, onPurpose, onChooseDay }) {
+  const [reflectionExamId, setReflectionExamId] = useState('');
+  const recentExam = [...data.exams].filter(exam => exam.date <= today && dayDistance(exam.date, today) <= 14 && !getExamReflection(data, exam.id)?.mood).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const reflectionExam = data.exams.find(exam => exam.id === reflectionExamId);
   const history = plan.isHistory || date < today;
   const preview = date > today;
   const tasks = plan.tasks || [];
@@ -101,12 +106,15 @@ export default function Today({ data, today, date, plan, onOpenTask, onComplete,
   };
 
   return <section className="coach-today stack" aria-label="Dein Tagesplan">
+    {reflectionExam && onChange && <Modal title="Deine Klausur" onClose={() => setReflectionExamId('')}><ExamRecovery data={data} exam={reflectionExam} today={today} onChange={onChange}/></Modal>}
     <header className="coach-today-header"><div><p className="coach-greeting">{history ? 'Dein Rückblick' : preview ? 'Deine Vorschau' : `${greeting}${data.profile.name ? `, ${data.profile.name}` : ''}`}</p><div className="today-title-line"><h1>{date === today ? 'Heute' : formatDate(date, { weekday: 'long' })}</h1><p className="coach-date">{formatDate(date, { day: 'numeric', month: 'long' })}</p></div></div><button className="icon-button calendar-button" aria-label="Wochenplan öffnen" onClick={() => onPlan('week')}><CalendarDays size={21}/></button></header>
     {date !== today && <button className="text-button" onClick={() => onChooseDay(today)}>Zurück zu heute <ArrowRight size={15}/></button>}
 
     <section className="daily-mission" aria-label="Deine heutige Mission"><span className="eyebrow">{history ? 'DEIN GESPEICHERTER TAG' : 'HEUTE WICHTIG'}</span><h2>{motivation}</h2><div className="mission-priority"><span className="mission-priority-mark" aria-hidden="true"/><div><strong>{history ? 'Deine gespeicherten Schritte' : noTime || allDone ? 'Freiraum für dich' : priorityName || 'Ein guter nächster Schritt'}</strong>{(!urgent || history || noTime || allDone) && <p>{history ? `${tasks.length} Schritte im Verlauf` : noTime || allDone ? 'Dein Plan darf auch fertig sein.' : priorityReason}</p>}</div></div>
       {!history && <button className="mission-time" onClick={onTime} aria-label="Lernzeit anpassen"><Clock3 size={14}/><span>{formatMinutes(plan.availableMinutes)} verfügbar</span><ChevronRight size={14}/></button>}
     </section>
+
+    {!history && !preview && recentExam && onChange && <div className="post-exam-prompt"><div><strong>{subjectLabel(data.subjects.find(subject => subject.id === recentExam.subjectId))} · Deine Klausur</strong><span>{recentExam.date === today ? 'Schon geschrieben? Halte deinen Eindruck fest.' : 'Wie lief deine Klausur?'}</span></div><Button variant="secondary" onClick={() => setReflectionExamId(recentExam.id)}>Nachbesprechen <ArrowRight size={14}/></Button></div>}
 
     {!history && <div className="today-insights"><section className="next-events" aria-label="Nächste Termine"><span className="eyebrow">{nextExam ? 'NÄCHSTE KLAUSUR' : 'NÄCHSTER TERMIN'}</span>{nextEvent ? <button className={`next-event ${nextExam ? 'is-exam' : ''}`} onClick={() => onPlan(nextEvent.source === 'exam' ? 'exams' : 'events')}><span className="exam-count"><strong>{nextEvent.daysUntil === 0 ? 'Heute' : nextEvent.daysUntil === 1 ? 'Morgen' : nextEvent.daysUntil}</strong>{nextEvent.daysUntil > 1 && <small>Tage</small>}</span><span className="exam-name">{nextSubject ? subjectLabel(nextSubject) : nextEvent.title}</span><span className="insight-caption">{formatDate(nextEvent.date, { day: 'numeric', month: 'long' })}{nextEvent.time ? ` · ${nextEvent.time}` : ''}</span><ChevronRight size={15} className="insight-chevron"/></button> : <div className="event-empty"><h2>Termin offen</h2><button className="text-button" onClick={() => onPlan('exams')}>Prüfung eintragen <Plus size={14}/></button></div>}{earlierEvent && <button className="earlier-event" onClick={() => onPlan('events')}><span>{earlierEvent.title}</span><small>{countdown(earlierEvent.daysUntil)}</small></button>}</section>
       {longTerm ? <section className="improvement-opportunity" aria-label="Deine größte Lernchance"><span className="eyebrow">{urgent && longTerm.subjectId !== priority?.subjectId ? 'LANGFRISTIG VERBESSERN' : 'VERBESSERUNGSZIEL'}</span><button className="improvement-open" onClick={() => onProgress(longTerm.subjectId)}><h2>{longTermName}{longTerm.level === 'LK' && <small>LK</small>}</h2><span className="opportunity-score">{score == null ? 'Stand offen' : <>{pointLabel(score)}{longTerm.target !== null && <><span> → </span>{pointLabel(longTerm.target)}</>}<small> / 15</small></>}</span><span className="insight-caption">{score == null ? improvementReason : scoreLabel}</span><span className="insight-link">Ziel berechnen <ChevronRight size={14}/></span></button></section> : <section className="improvement-opportunity"><span className="eyebrow">DEIN LERNSTAND</span><h2>Wo stehst du?</h2><button className="text-button" onClick={onProgress}>Erste Note eintragen <Plus size={14}/></button></section>}
