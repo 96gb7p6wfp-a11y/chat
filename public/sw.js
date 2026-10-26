@@ -3,7 +3,7 @@ const SHELL_URL = new URL(self.registration.scope);
 const SHELL_PATH = SHELL_URL.pathname;
 // CacheStorage is shared by every app on this origin; keep each base isolated.
 const CACHE_PREFIX = `northstar-shell-${encodeURIComponent(SHELL_PATH)}-`;
-const CACHE_NAME = `${CACHE_PREFIX}v7`;
+const CACHE_NAME = `${CACHE_PREFIX}v8`;
 const PUBLIC_FILES = [
   SHELL_PATH,
   ...['manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png']

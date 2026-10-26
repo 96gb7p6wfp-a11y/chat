@@ -4,45 +4,48 @@ Use a production build for offline and final mobile-layout checks. Test
 records must stay in an isolated browser profile; example marks, mock scores,
 dates and achievements are test scenarios, not application defaults.
 
-## Verified release checks — 19–20 October 2026
+## Verified release checks — 26 October 2026
 
-- Node.js 24.19.0 and npm 11.9.0; frozen dependency lock preserved.
-- `npm test`: **289 passed, 0 failed, 0 skipped** in `/tmp/ux-unit-publish.log`.
-- Root and `/chat/` production builds passed. Vite reports a main-chunk size
-  advisory (approximately 558 kB minified / 166 kB gzip); this is not a build
-  failure or a claim of a completed performance optimization.
-- Maintained academic browser suite: **25 passed, 0 failed** against the
-  production snapshot, including both pathways, preserved missed-task history,
-  grades, IELTS, focus time, backup/recovery and offline reload.
-- New Q1 repair browser suite: **8 passed, 0 failed**, covering reviewed imports
-  of exactly nine examinations and 19 lesson blocks, corrected-record re-import,
-  the unconfirmed German 4/15 draft, preservation after correcting its grade,
-  missing forecast assumptions, achievable
-  and impossible targets, completion/skip/review, IELTS/SAT setup, evidence,
-  changed dates, official-link actions and backup restoration. An explicit
-  08:00–17:00 study window verifies lessons remove conflicting session times.
-- No uncaught page errors or application console errors in these journeys.
-- Hosting browser suite: **5 passed**, covering both root and `/chat/` paths,
-  manifest resolution, cache isolation/cleanup, real interface font bytes,
-  offline reload and exclusion of authenticated, private, no-store,
-  query-bearing and outside-scope requests.
-- Responsive audit script covers 320/360/375/390/430/768/1280 px, light/dark and
-  100%/200% text with populated forms: **28 configurations passed**.
-  It includes the IELTS and SAT goals/results, reviewed school imports,
-  grade analysis, task editing/movement, guided learning, focus timer, every
-  secondary screen, and a reduced keyboard viewport with reachable actions.
-- Interactive screenshot inspection found and repaired the overlapping form
-  grid, toast-over-modal obstruction, tiny schedule inputs and focus-clock
-  wrapping under enlarged text. Screenshots remain in ignored `test-results/`.
+- Node.js 24.19.0, npm 11.9.0; frozen dependency lock retained.
+- `npm test`: **319 passed, 0 failed, 0 skipped** (`/tmp/tutor-release-unit.log`).
+- Production root and `/chat/` builds passed. Practice content, roadmap and vendor
+  assets are separate static chunks discoverable by the offline shell. Main app
+  chunk is approximately 482 kB minified / 137 kB gzip; no bundle-size warning.
+- Existing browser regression: **25/25 passed**. Q1 document repair regression:
+  **8/8 passed**. New personal-tutor browser journeys: **8/8 passed**.
+- Critical flows include confirmed 8/9-point records with explicit weights,
+  target 13, a next-score threshold of 14.8 (15 whole points), an impossible
+  22-point scenario, multiple remaining unknowns, comparison scenarios and reload.
+  These are isolated test assumptions, not the user's required school result.
+- Baseline 8.5 remains unconfirmed and cannot generate a fictitious exact forecast.
+  Home improvement opens the relevant subject directly. Unknown/unsupported
+  examination topics require a choice or explicitly show incomplete coverage.
+- Authored Civil Rights material was exercised through learning, all three
+  questions, answer input/reload, solutions, self-checks, mandatory retry,
+  saved mistake, completion and a later review. Older notes and attempts survive.
+- Responsive audit: **28/28 configurations passed** across 320/360/375/390/430/
+  768/1280 px, both themes and 100%/200% text. Populated forms, target calculation,
+  actual exercise/solution views and shortened keyboard viewports are covered.
+- Four additional targeted browser checks passed: actual exam-preview material,
+  opening the matching scheduled tutor, separate explanation paragraphs, and
+  Listening question preview with the transcript hidden before checking.
+- Hosting suite: **5/5 passed** for root and `/chat/` manifest resolution, cache
+  isolation/cleanup, offline content and bundled font fallback, authenticated/
+  private/no-store/query exclusions and base-path validation.
+- No uncaught page errors or application console errors in the tested journeys.
+  Fresh 320/390 px light/dark screenshots were inspected; artifacts remain in
+  ignored `test-results/` and execution logs under `/tmp/`.
 
-Physical iPhone Safari, the native iOS keyboard/date picker and installed Home
-Screen acceptance remain unverified. Official provider pages could not be
-retrieved through this environment's network policy; current prices, available
-places/dates and document rules are linked but not claimed to be live verified.
-The final eight-case repair journey also passed on the exact `/chat/` release
-build after the corrected-grade regression fix. These results validate local
-production builds. Publication must be verified
-separately through the existing Pages workflow and the public website.
+Physical iPhone Safari, its native keyboard/date picker and installed Home Screen
+acceptance remain unverified. Headless Chromium has no English speech voice, so
+Listening's honest unavailable-voice fallback was checked; audible playback needs
+a supported device. Authored content covers 17 modules, not the entire curriculum.
+Writing and confidence checks are self-assessments, not automatic school grades,
+IELTS bands or a qualified tutor's correction. Unsupported content says so.
+
+Official provider prices, dates and document rules remain linked rather than
+claimed live-verified. Publication is verified separately through the existing
+Pages workflow and public release bytes/browser flow.
 
 ## Repeatable checks
 
@@ -57,6 +60,9 @@ With the preview running, use another terminal:
 
 ```sh
 python3 tests/coach_upgrade_browser.py --url http://127.0.0.1:4176
+python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
+python3 tests/personal_tutor_browser.py --url http://127.0.0.1:4176
+python3 tests/responsive_browser.py --url http://127.0.0.1:4176
 python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
 python3 tests/responsive_browser.py --url http://127.0.0.1:4176
 python3 tests/hosting_smoke.py
@@ -96,7 +102,10 @@ Safari certification. On a real iPhone:
 5. Start a task, open its materials, save a draft and reflection, pause/resume
    focus, complete one action and skip/move another. Reload and verify notes,
    measured time and completion remain intact.
-6. Enter IELTS targets and a test/mock result with the correct provenance.
+6. Start a specific tutor module, answer, compare and retry a question. Close
+   and reopen mid-session to check answers persist. Confirm an unsupported topic
+   is clearly unavailable. On a device with an English voice, try the original
+   Listening exercise before revealing its transcript. Enter IELTS targets and a test/mock result with the correct provenance.
    Check the four skills and that task completion does not invent a band.
 7. Add a real activity/project with an evidence note. Check planned,
    self-reported and user-supported records remain distinguishable.

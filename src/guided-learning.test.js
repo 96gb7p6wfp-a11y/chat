@@ -107,7 +107,7 @@ test('self-reported reflections persist as separate evidence and do not fabricat
   assert.deepEqual(normalizeLearning(JSON.parse(JSON.stringify(saved.learning))), saved.learning);
   assert.equal(saved.learning.attempts[0].nextReviewDate, '2026-10-20');
   assert.throws(() => saveLearningAttempt(original, record({ rating: 'official-band-8' })), /Einschätzung/);
-  assert.deepEqual(normalizeLearning({ attempts: [record({ date: '2026-02-30' })] }), { attempts: [] });
+  assert.deepEqual(normalizeLearning({ attempts: [record({ date: '2026-02-30' })] }), { attempts: [], sessions: [] });
 });
 
 test('review intervals depend on the learner report and only the latest evidence remains due', () => {

@@ -37,7 +37,8 @@ Business logic does not read local storage or call a paid AI service:
 | `src/sat.js` | SAT sections, evidence, practice and full-simulation candidates |
 | `src/test-preparation.js` | Shared school-aware test budgets and conditional preparation horizons |
 | `src/school-import.js` | Reviewed, idempotent school-document merges and unconfirmed German-grade draft |
-| `src/guided-learning.js` | Learning phases, practice selection, reflections and review scheduling |
+| `src/guided-learning.js` | Legacy practice compatibility, tutor metadata, reflections and review scheduling |
+| `src/tutor.js` | Authored interactive material, conservative topic matching and session normalization |
 | `src/roadmap.js` | USA/Germany phases, milestone actions and goal links |
 | `src/events.js` | Unified dated sources and type-specific preparation |
 | `src/profile-evidence.js` | Activity evidence status and profile-development recommendations |
@@ -184,28 +185,43 @@ are protected from regeneration; the app does not invent a historical plan
 for a date with none. Date arithmetic uses calendar-day components to avoid
 daylight-saving changes shifting revision stages.
 
-## Guided learning and reflection
+## Interactive tutor and reflection
 
-`getGuidedSession` returns an objective, why, first step, expected result,
-method, timed phases, practice, resources and self-check guidance. Phase
-durations fit the actual task budget. Subject-specific methods include
-retrieval, worked practice, writing rubrics, error analysis, timed work and
-review; non-academic roadmap tasks instead guide the concrete next action.
+`getTutorSession(data, task, today, selectedUnitId)` resolves concrete, authored
+material. An explicit user choice is labelled as such; missing exam topics do not
+become a guessed syllabus. Unsupported areas return an honest incomplete state.
+Broad text matching is guarded against related but different topics such as
+Lorentz force versus elementary mechanics, RC charging versus discharge, and
+advanced integration versus elementary antiderivatives.
 
-Selected original exercises cover exponential functions and RC discharge.
-German literary analysis includes a short original passage, paragraph
-structure, criteria and a non-binding comparison answer. Existing English
-and German writing/vocabulary material remains available. Other topics use
-relevant current course material and links such as Serlo, LEIFIphysik and
-official language-test preparation. No specific textbook page or unknown
-Klausur requirement is invented. Material that is provisional is labelled.
+Seventeen authored units provide exact topics, short explanations, original
+passages or numerical questions, model solutions, checking criteria and review.
+Question counts and phase minutes fit the allocated duration. Original synthetic
+Listening requires a usable English device voice; no voice means an explicit
+unavailable state. Full SAT simulations use official Bluebook externally.
 
-A learner can save an answer, an error/insight and confidence of uncertain,
-effortful or independent. The latest topic evidence drives a review date;
-due reviews become workload candidates rather than an additional unlimited
-list. Reflections can be edited/deleted. Persistent difficulty can recommend
-asking a teacher about a specific concept. These are self-checks, not
-reliable automatic correction, teacher assessment or an official IELTS band.
+The UI opens with topic, time and first exercise, then reveals one phase and
+question at a time. Confidence is self-reported. Uncertain questions require a
+second attempt before finishing; no automatic grade or band is inferred.
+
+`data.learning.sessions` stores task/unit identifiers, stage, question position,
+answer maps, revealed solutions, checks, mistake notes, retry drafts and timestamps.
+`normalizeLearning`, strict storage validation and backups retain these fields
+additively alongside old attempts. Saving or removing an attempt retains sessions.
+New unit/day completions preserve previous attempts rather than overwriting them.
+
+Session autosaves and hypothetical grade forecasts are excluded from the planning
+fingerprint. Started tutor tasks survive meaningful replanning and are parked
+with their responses intact if time becomes unavailable. Finished attempts feed
+review scheduling; exact unit IDs survive generated-task metadata, and previously
+uncertain question IDs are prioritized before short-session truncation. Three
+separate difficult attempts can prompt focused teacher feedback.
+
+Legacy notes and attempts remain separately accessible. `getGuidedSession` retains
+its older fields for existing data and integrations, while its `tutor` property
+and `getTaskLearningMetadata` expose actual authored units to the new experience.
+Exam detail previews also use actual tutor material or explicitly unavailable
+states, rather than presenting a generic method list as a completed lesson.
 
 ## IELTS evidence and workload
 
@@ -327,3 +343,19 @@ simulation produces a clear validation message.
 Both domains preserve planned/booked provenance, unknown targets and partial
 results through additive v2 normalization and strict backup round trips. The
 storage key, browser origin and Pages configuration are unchanged.
+
+## Persisted target-grade scenarios
+
+Each subject optionally stores `forecast`: semester scope, next/remaining mode,
+up to eight hypothetical assessments with explicit category/weight/optional fixed
+score, and an optional user-chosen comparison score. These records never enter
+actual grade history or the daily-planning priority calculation.
+
+`getGradeForecast` requires confirmed dated assessment records. Next mode solves
+one unknown only after later outcomes are fixed explicitly; remaining mode solves
+the common mean for unscored assessments. Missing weights/categories/semester
+alignment keep the calculation open. The UI shows whole-point minima prominently,
+with exact thresholds, the numeric equation and attainable outcomes in details.
+A baseline average is preserved and labelled unconfirmed, never expanded into
+invented written/oral records. Grade feedback comes from saved notes, category
+results and documented practice rather than diagnosis from a low score.

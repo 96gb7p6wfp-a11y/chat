@@ -4,7 +4,6 @@ import { ArrowRight, CalendarDays, Check, Compass, Plus, Sun, TrendingUp, UserRo
 import { addTask, ensureDailyPlan, getDailyPlan, localDateKey, normalizeData, removeTask, saveSchedule, saveTaskNotes, saveTaskReview, shiftDate, skipTask, toggleTask, moveTask, editTask, replaceTask } from './coach.js';
 import Today from './components/Today.jsx';
 import GuidedLearning from './components/GuidedLearning.jsx';
-import { getGuidedSession } from './guided-learning.js';
 import { subjectLabel, categoryLabel } from './i18n.js';
 import { loadData, MAX_BACKUP_BYTES, parseBackup, saveData, serializeBackup, STORAGE_KEY } from './storage.js';
 import Plan from './components/Plan.jsx';
@@ -59,6 +58,7 @@ function App() {
   const [data, setData] = useState(() => ensureDailyPlan(boot.data, today));
   const [tab, setTab] = useState(activeTab);
   const [profileSection, setProfileSection] = useState('Goals');
+  const [progressSubjectId, setProgressSubjectId] = useState('');
   const [planView, setPlanView] = useState('week');
   const [planPathway, setPlanPathway] = useState(null);
   const [selectedDay, setSelectedDay] = useState(today);
@@ -83,7 +83,8 @@ function App() {
 
   function notify(message) { setToast(message); }
   function update(updater) { setData(current => ensureDailyPlan(typeof updater === 'function' ? updater(current) : updater,selectedDay,today)); }
-  function navigate(next) { setTab(next); location.hash = next; window.scrollTo({top:0,behavior:'instant'}); }
+  function navigate(next) { if (next !== 'progress') setProgressSubjectId(''); setTab(next); location.hash = next; window.scrollTo({top:0,behavior:'instant'}); }
+  function openProgress(subjectId = '') { setProgressSubjectId(data.subjects.some(subject => subject.id === subjectId) ? subjectId : ''); navigate('progress'); }
   function chooseDay(date) { setSelectedDay(date); setData(current => ensureDailyPlan(current,date,today)); navigate('today'); }
   function completeTask(task) { if (task.date > today) { notify('Künftige Aufgaben sind eine Vorschau. Schließe sie am jeweiligen Tag ab.'); return; } const now = new Date(); update(current => toggleTask(current.study?.active?.taskId === task.id ? finishStudy(current,now) : current,task.id,now)); if (!task.completed) notify('Geschafft. Dein Fortschritt ist gespeichert.'); }
   function finishSetup(next) { setData(ensureDailyPlan(normalizeData(next,today),today)); setSelectedDay(today); setSetupOpen(false); navigate('today'); notify(next.demo ? 'Der Beispielplan ist bereit. Du kannst jederzeit eigene Angaben eintragen.' : 'Dein Lernplan ist bereit. Beginne mit dem ersten Schritt.'); }
@@ -131,11 +132,11 @@ function App() {
       {tab === 'today' && <Today data={data} today={today} date={selectedDay} plan={dailyPlan}
         onOpenTask={task => setModal({type:'task',id:task.id})} onComplete={completeTask}
         onTime={() => setModal({type:'time'})} onAdd={() => setModal({type:'addTask'})}
-        onPlan={showPlan} onProgress={() => navigate('progress')} onProfile={openProfile}
+        onPlan={showPlan} onProgress={openProgress} onProfile={openProfile}
         onPurpose={() => setModal({type:'purpose'})} onChooseDay={chooseDay}/>}
-      {tab === 'plan' && <Plan data={data} today={today} initialView={planView} initialPathway={planPathway || data.profile.pathways[0]} onChange={update} notify={notify} onSelectDay={chooseDay} onOpenProfile={openProfile} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
-      {tab === 'progress' && <Progress data={data} today={today} onChange={update} notify={notify} onOpenPlan={showPlan} onOpenProfile={openProfile} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
-      {tab === 'profile' && <Profile key={profileSection} initialSection={profileSection} data={data} today={today} onChange={update} notify={notify} onRestartSetup={() => setSetupOpen(true)} onExport={exportData} onImport={() => importRef.current?.click()} onOpenSchedule={() => showPlan('schedule')} onOpenProgress={() => navigate('progress')} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
+      {tab === 'plan' && <Plan data={data} today={today} initialView={planView} initialPathway={planPathway || data.profile.pathways[0]} onChange={update} notify={notify} onSelectDay={chooseDay} onOpenProfile={openProfile} onOpenTask={task => setModal({type:'task',id:task.id})} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
+      {tab === 'progress' && <Progress key={progressSubjectId || 'overview'} initialSubjectId={progressSubjectId} data={data} today={today} onChange={update} notify={notify} onOpenPlan={showPlan} onOpenProfile={openProfile} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
+      {tab === 'profile' && <Profile key={profileSection} initialSection={profileSection} data={data} today={today} onChange={update} notify={notify} onRestartSetup={() => setSetupOpen(true)} onExport={exportData} onImport={() => importRef.current?.click()} onOpenSchedule={() => showPlan('schedule')} onOpenProgress={() => openProgress()} onOpenSchoolImport={(section = 'overview') => setModal({type:'schoolImport',section})}/>}
     </main>
     <nav className="bottom-nav" aria-label="Hauptnavigation mobil">{NAV.map(({id,label,icon:Icon}) => <button key={id} onClick={() => navigate(id)} aria-current={tab === id ? 'page' : undefined} className={tab === id ? 'active' : ''}><Icon size={22} strokeWidth={tab === id ? 2 : 1.6}/><span>{label}</span></button>)}</nav>
     <input type="file" ref={importRef} accept="application/json,.json" aria-label="Northstar-Sicherung importieren" className="visually-hidden" onChange={importData}/>
@@ -178,18 +179,19 @@ function TaskDetail({task,data,today,onClose,onSave,onComplete,onSkip,onRemove,o
   }, [notes,review,task.notes]);
   const save = () => onSave(notes,review);
   function close() { if (notes !== (task.notes || '')) save(); onClose(); }
-  const session = getGuidedSession(data,task,today);
-  return <Modal title="So lernst du" onClose={close}><div className="task-detail stack">
-    <div><p className="page-kicker">{categoryLabel(task.category)} · {task.minutes} MIN{task.priority === 'high' ? ' · PRIORITÄT' : ''}</p><h2 className="task-detail-title">{task.origin === 'custom' ? task.title : session.objective}</h2>{task.skipped && <p className="muted">Für später gespeichert. Deine bisherigen Notizen bleiben erhalten.</p>}</div>
-    {!task.skipped && <details className="product-details task-timer"><summary>Fokustimer</summary><StudyLauncher task={task} today={today} active={data.study?.active} onStart={minutes => {save();onStartStudy(minutes);}} onOpen={() => {save();onOpenStudy();}}/></details>}
-    <GuidedLearning data={data} task={task} today={today} onChange={onChange} draft={notes} onDraftChange={setNotes} showObjective={false}/>
-    {safeResource(task.resource) && <a className="text-button" href={safeResource(task.resource)} target="_blank" rel="noopener noreferrer">Gespeichertes Material öffnen <ArrowRight size={14}/></a>}
-    <details className="task-purpose product-details"><summary>Dein langfristiges Ziel</summary><section className="stack compact" aria-label="Verknüpftes Ziel"><p className="muted small">{goalLabel(task)}</p><button className="text-button" onClick={() => {save();onGoal();}}>Zum Studienweg <ArrowRight size={14}/></button>{task.eventId && <button className="text-button" onClick={() => {save();onEvents();}}>Verknüpften Termin ansehen <CalendarDays size={14}/></button>}</section></details>
-    {task.sessions?.length > 0 && <p className="field-help">Vorgesehene Lernzeit · {task.sessions.map(session => `${session.start}–${session.end}`).join(' · ')}</p>}
-    {(task.category === 'activity' || task.category === 'university' || task.roadmapStepId) && <Button variant="secondary" onClick={() => {save();onOpenProfile(task.category === 'activity' ? 'Activities' : task.goalId === 'grades' ? 'Fachs' : ['language','tests'].includes(task.goalId) ? 'Goals' : 'Universities');}}>Passenden Profileintrag öffnen <ArrowRight size={16}/></Button>}
+  const academic = ['academics','language'].includes(task.category) && !task.roadmapStepId && !task.eventStage;
+  function finishLearning() { save(); if (!task.completed && task.date <= today) onComplete(); onClose(); }
+  return <Modal title={academic ? 'Lerneinheit' : 'Dein nächster Schritt'} onClose={close}><div className="task-detail stack">
+    {task.skipped && <p className="field-help">Für später gespeichert. Deine Antworten bleiben erhalten.</p>}
+    <GuidedLearning data={data} task={task} today={today} onChange={onChange} draft={notes} onDraftChange={setNotes} showObjective={true} onFinish={finishLearning}/>
+    {academic && <details className="product-details"><summary>Notizen & Entwürfe</summary><Field label="Deine gespeicherten Notizen" help="Bleiben neben den Antworten deiner Lerneinheit erhalten."><textarea value={notes} onChange={event => setNotes(event.target.value)} rows={4} maxLength={5000}/></Field></details>}
+    {!academic && <div className="sheet-footer"><Button variant="secondary" onClick={() => {save();onClose();}}>Notiz speichern</Button><Button disabled={task.date > today} onClick={() => {save();onComplete();onClose();}}><Check size={17}/>{task.completed ? 'Als offen markieren' : 'Aufgabe abschließen'}</Button></div>}
+    <details className="product-details task-timer"><summary>Fokustimer</summary><StudyLauncher task={task} today={today} active={data.study?.active} onStart={minutes => {save();onStartStudy(minutes);}} onOpen={() => {save();onOpenStudy();}}/></details>
+    <details className="task-purpose product-details"><summary>Aufgabe & Planung</summary><div className="stack compact"><p className="field-help">{categoryLabel(task.category)} · {task.minutes} Min. · {task.priority === 'high' ? 'Hohe Priorität' : 'Dein Lernplan'}</p><p className="muted small">{task.reason}</p><p className="muted small">{goalLabel(task)}</p>{task.sessions?.length > 0 && <p className="field-help">Vorgesehene Zeit · {task.sessions.map(session => `${session.start}–${session.end}`).join(' · ')}</p>}<button className="text-button" onClick={() => {save();onGoal();}}>Zum Studienweg <ArrowRight size={14}/></button>{task.eventId && <button className="text-button" onClick={() => {save();onEvents();}}>Verknüpften Termin ansehen <CalendarDays size={14}/></button>}{safeResource(task.resource) && <a className="text-button" href={safeResource(task.resource)} target="_blank" rel="noopener noreferrer">Gespeichertes Material öffnen <ArrowRight size={14}/></a>}
+    {(task.category === 'activity' || task.category === 'university' || task.roadmapStepId) && <Button variant="secondary" onClick={() => {save();onOpenProfile(task.category === 'activity' ? 'Activities' : task.goalId === 'grades' ? 'Subjects' : ['language','tests'].includes(task.goalId) ? 'Goals' : 'Universities');}}>Passenden Profileintrag öffnen <ArrowRight size={16}/></Button>}
     {task.category === 'review' && <Button variant="secondary" onClick={() => {save();onProgress();}}>Wochenrückblick öffnen <ArrowRight size={16}/></Button>}
-    <div className="sheet-footer"><Button variant="secondary" onClick={() => {save();onClose();}}>Notiz speichern</Button><Button disabled={task.date > today} onClick={() => {save();onComplete();onClose();}}><Check size={17}/>{task.completed ? 'Als offen markieren' : 'Aufgabe abschließen'}</Button></div>
-    <details className="product-details"><summary>Aufgabe anpassen</summary><div className="task-actions">{!task.completed && <><Button variant="secondary" onClick={() => {save();onEdit();}}>Bearbeiten</Button><Button variant="secondary" onClick={() => {save();onReschedule();}}>Verschieben</Button>{task.date === today && !task.skipped && <Button variant="ghost" onClick={() => {save();onSkip();}}>Heute auslassen</Button>}{task.origin === 'generated' && <Button variant="ghost" onClick={() => {save();onReplace();}}>Andere Aufgabe wählen</Button>}</>}<button className="text-button" onClick={() => {save();onRemove();}}>Aus dem Plan entfernen</button></div></details>
+    </div></details>
+    <details className="product-details"><summary>Aufgabe anpassen</summary><div className="task-actions">{!task.completed && <><Button variant="secondary" onClick={() => {save();onEdit();}}>Bearbeiten</Button><Button variant="secondary" onClick={() => {save();onReschedule();}}>Verschieben</Button>{task.date === today && !task.skipped && <Button variant="ghost" onClick={() => {save();onSkip();}}>Heute auslassen</Button>}{task.origin === 'generated' && <Button variant="ghost" onClick={() => {save();onReplace();}}>Andere Aufgabe wählen</Button>}{academic && <Button variant="ghost" disabled={task.date > today} onClick={() => {save();onComplete();onClose();}}>Bereits selbst erledigt</Button>}</>}{academic && task.completed && <Button variant="ghost" onClick={() => {save();onComplete();onClose();}}>Als offen markieren</Button>}<button className="text-button" onClick={() => {save();onRemove();}}>Aus dem Plan entfernen</button></div></details>
   </div></Modal>;
 }
 

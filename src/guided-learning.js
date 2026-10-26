@@ -1,3 +1,5 @@
+import { getTutorSession } from './tutor.js';
+import { normalizeTutorSessions } from './tutor.js';
 import { getExercise } from './exercises.js';
 import { getIELTSPractice } from './ielts.js';
 import { getSATPractice } from './sat.js';
@@ -17,7 +19,7 @@ export function normalizeLearning(value) {
     if (seen.has(id)) return null;
     seen.add(id);
     return { id, taskId: clean(entry.taskId, 200), subjectId: clean(entry.subjectId, 200), topic: clean(entry.topic, 200), questionId: clean(entry.questionId, 200), answer: clean(entry.answer, 20000), date: entry.date, rating: entry.rating, mistake: clean(entry.mistake), nextReviewDate: validDate(entry.nextReviewDate) ? entry.nextReviewDate : shift(entry.date, entry.rating === 'good' ? 4 : entry.rating === 'hard' ? 2 : 1) };
-  }).filter(Boolean) };
+  }).filter(Boolean), sessions: normalizeTutorSessions(value?.sessions) };
 }
 
 export function nextLearningReview(attempts, entry) {
@@ -33,11 +35,11 @@ export function saveLearningAttempt(state, input) {
   if (!input || !validDate(input.date) || !clean(input.topic, 200) || !['again', 'hard', 'good'].includes(input.rating)) throw new TypeError('Wähle ein Thema, ein Datum und deine Einschätzung.');
   const learning = normalizeLearning(state.learning);
   const entry = { ...input, id: input.id || identifier(), nextReviewDate: nextLearningReview(learning.attempts, input) };
-  return { ...state, learning: normalizeLearning({ attempts: [...learning.attempts.filter(item => item.id !== entry.id), entry] }) };
+  return { ...state, learning: normalizeLearning({ ...learning, attempts: [...learning.attempts.filter(item => item.id !== entry.id), entry] }) };
 }
 
 export function removeLearningAttempt(state, id) {
-  return { ...state, learning: { attempts: normalizeLearning(state.learning).attempts.filter(entry => entry.id !== id) } };
+  return { ...state, learning: { ...normalizeLearning(state.learning), attempts: normalizeLearning(state.learning).attempts.filter(entry => entry.id !== id) } };
 }
 
 /** Only the latest evidence for a topic can require another review. */
@@ -219,10 +221,10 @@ export function getGuidedSession(data = {}, task = {}, today = task.date) {
   const differentSessions = new Set(struggles.map(item => item.taskId || item.date));
   const helpRecommendation = differentSessions.size >= 3 && recent[0]?.rating !== 'good' ? 'Dieses Thema war in mindestens drei Einheiten noch unsicher. Zeige deiner Lehrkraft genau diese Fehlerstelle und bitte um einen erklärten Lösungsweg. Eine Lerngruppe kann den erneuten Versuch begleiten.' : '';
   const reviewDate = recent[0]?.nextReviewDate || (validDate(today) ? shift(today, 1) : '');
-  return { ...content, id: content.topic, subject, why: task.reason || 'Diese gezielte Einheit stärkt eine Fähigkeit, die du für deine nächsten Leistungen brauchst.', phases, reviewDate, helpRecommendation, latestAttempt: recent[0] || null };
+  return { ...content, id: content.topic, subject, why: task.reason || 'Diese gezielte Einheit stärkt eine Fähigkeit, die du für deine nächsten Leistungen brauchst.', phases, reviewDate, helpRecommendation, latestAttempt: recent[0] || null, tutor: getTutorSession(data, task, today) };
 }
 
 export function getTaskLearningMetadata(task, data = {}, today = task.date) {
   const session = getGuidedSession(data, task, today);
-  return { learningTopic: session.topic, objective: session.objective, expectedResult: session.expectedResult };
+  return session.tutor.status === 'ready' ? { learningTopic: session.tutor.unitId, objective: session.tutor.objective, expectedResult: session.tutor.expectedResult } : { learningTopic: session.topic, objective: session.objective, expectedResult: session.expectedResult };
 }

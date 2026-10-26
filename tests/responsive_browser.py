@@ -125,6 +125,19 @@ def suite(browser, url, seed, width, dark, scale):
     page.locator('.coach-task-open').first.click()
     populate_dialog(page)
     audit(page,prefix+'-guided-learning',capture)
+    if page.get_by_label('Lernthema wählen',exact=True).count():
+        selector=page.get_by_label('Lernthema wählen',exact=True)
+        if not selector.input_value():
+            selector.select_option(selector.locator('option:not([value=""])').first.get_attribute('value'))
+    if page.get_by_role('button',name='Lernen starten',exact=True).count():
+        click(page,'Lernen starten')
+        audit(page,prefix+'-tutor-explanation',capture)
+        click(page,'Zu den Aufgaben')
+        page.get_by_label('Deine Antwort',exact=True).fill('Eine ausführliche eigene Antwort mit Belegen, Erklärung und sorgfältiger Überprüfung.')
+        audit(page,prefix+'-tutor-practice',capture)
+        click(page,'Antwort prüfen')
+        audit(page,prefix+'-tutor-solution',capture)
+    page.get_by_role('dialog').locator('details').evaluate_all('(els)=>els.forEach(el=>{el.open=true})')
     click(page,'Bearbeiten')
     populate_dialog(page)
     audit(page,prefix+'-edit-task')
@@ -242,6 +255,16 @@ def main():
         page.wait_for_function('key=>JSON.parse(localStorage.getItem(key))?.onboardingCompleted',arg=KEY)
         seed=page.evaluate('key=>JSON.parse(localStorage.getItem(key))',KEY)
         seed['profile']['name']='Eric · isolierter UI-Test'
+        # Explicit QA evidence enables the actual next-exam calculation and its
+        # populated scenario controls; this never changes application defaults.
+        math=next(subject for subject in seed['subjects'] if subject['id']=='mathematics')
+        math['target']=13
+        math['grading']['mode']='weighted'
+        math['forecast']={'semester':'Q1','mode':'next','future':[{'id':'qa-next','type':'written','weight':5,'points':None}],'comparisonScore':12}
+        seed['grades']=[{'id':'qa-written','subjectId':'mathematics','points':8,'type':'written','date':'2026-10-17','semester':'Q1','weight':1,'note':''},{'id':'qa-oral','subjectId':'mathematics','points':9,'type':'oral','date':'2026-10-18','semester':'Q1','weight':1,'note':''}]
+        seed['exams']=[{'id':'qa-english','subjectId':'english','title':'Englisch · Civil Rights','date':'2026-10-26','topics':['Civil Rights','Brown v. Board of Education'],'format':'written','importance':'high'},{'id':'qa-math','subjectId':'mathematics','title':'Mathematik LK','date':'2026-12-17','topics':['Exponentialfunktionen'],'format':'written','importance':'normal'}]
+        seed['tasks']=[{'id':'qa-tutor','date':'2026-10-19','title':'Civil Rights konkret üben','category':'language','subjectId':'english','examId':'qa-english','minutes':15,'priority':'high','origin':'custom','completed':False,'completedAt':None,'notes':'','selfReview':[]}]
+
         seed['ielts'].update({'examDate':'2026-12-05','targetOverall':7.5,'targets':dict.fromkeys(['listening','reading','writing','speaking'],7)})
         context.close()
         count=0

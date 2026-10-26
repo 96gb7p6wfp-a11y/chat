@@ -11,8 +11,12 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Stable library bytes can stay cached when the coaching content changes.
-      // Both entry chunks remain discoverable by the offline shell installer.
-      output: { manualChunks: id => id.includes('/node_modules/') ? 'vendor' : undefined },
+      // All static entry chunks remain discoverable by the offline shell installer.
+      output: { manualChunks: id => {
+        if (id.includes('/node_modules/')) return 'vendor';
+        if (/\/src\/(?:practice-bank|exercises|tutor)\.js$/.test(id)) return 'practice';
+        if (/\/src\/roadmap\.js$/.test(id)) return 'roadmap';
+      } },
     },
   },
 });

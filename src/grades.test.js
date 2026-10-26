@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateGradeAverage, calculateSubject, getAcademicOverview, normalizeAcademicGrade, normalizeGrading, requiredFutureGrades } from './grades.js';
+import { calculateGradeAverage, calculateSubject, getAcademicOverview, normalizeAcademicGrade, normalizeGrading, normalizeGradeForecast, getGradeForecast, getGradeEvidence, requiredFutureGrades } from './grades.js';
 const record = (points, type = 'written', extra = {}) => ({ id: `g-${points}-${type}`, subjectId: 'math', date: '2026-10-19', points, type, semester: 'Q1', ...extra });
 const data = records => ({ profile: { schoolYear: 'Q1' }, subjects: [{ id: 'math', name: 'Mathematik', level: 'LK', target: 10, written: 6, oral: 11, baselineWritten: 6, baselineOral: 11 }], grades: records });
 
@@ -119,4 +119,94 @@ test('unassigned historical results are preserved and labeled as orientation', (
   assert.equal(result.average, 8);
   assert.match(result.methodLabel, /Ohne Halbjahr/);
   assert.equal(result.unassignedCount, 1);
+});
+
+function forecastAnalysis(records, target = 13, grading = { mode: 'weighted' }) {
+  const state = data(records);
+  state.subjects[0].target = target;
+  state.subjects[0].grading = grading;
+  return calculateSubject(state, 'math');
+}
+const nextScenario = (patch = {}) => ({ semester: 'Q1', mode: 'next', future: [{ id: 'next', type: 'written', weight: 5, points: null }], ...patch });
+
+test('prominent next-score calculation refuses an undated 8.5 starting estimate', () => {
+  const analysis = forecastAnalysis([], 13, { mode: 'simple' });
+  assert.equal(analysis.average, 8.5);
+  const result = getGradeForecast(analysis, nextScenario());
+  assert.equal(result.requiredScore, null);
+  assert.equal(result.status, 'missing-data');
+  assert.deepEqual(result.missingFields, ['records']);
+});
+test('a target of13 from confirmed8.5 needs14.8 on a next assessment weighted5', () => {
+  const analysis = forecastAnalysis([record(8, 'written', { weight: 1 }), record(9, 'oral', { weight: 1 })]);
+  const result = getGradeForecast(analysis, nextScenario());
+  assert.equal(analysis.average, 8.5);
+  assert.ok(Math.abs(result.requiredScore - 14.8) < 1e-9);
+  assert.equal(result.minimumWholePoints, 15);
+  assert.deepEqual(result.calculation, { target: 13, denominator: 7, constant: 17, coefficient: 5 });
+  assert.equal(result.achievable, true);
+  assert.match(result.explanation, /nächsten Leistung/);
+});
+test('a target of13 from confirmed8.5 is impossible when next assessment hasweight1', () => {
+  const result = getGradeForecast(forecastAnalysis([record(8, 'written', { weight: 1 }), record(9, 'oral', { weight: 1 })]), nextScenario({ future: [{ id: 'next', type: 'written', weight: 1 }] }));
+  assert.equal(result.requiredScore, 22);
+  assert.equal(result.status, 'impossible');
+  assert.ok(Math.abs(result.maxPossible - 32 / 3) < 1e-9);
+});
+test('an exact next score needs fixed assumptions for every other remaining assessment', () => {
+  const analysis = forecastAnalysis([record(8, 'written', { weight: 1 }), record(9, 'oral', { weight: 1 })], 12);
+  const config = nextScenario({ future: [{ id: 'next', type: 'written', weight: 2 }, { id: 'other', type: 'oral', weight: 2 }] });
+  assert.deepEqual(getGradeForecast(analysis, config).missingFields, ['otherScores']);
+  config.future[1].points = 14;
+  const result = getGradeForecast(analysis, config);
+  assert.equal(result.requiredScore, 13.5);
+  assert.equal(result.minimumWholePoints, 14);
+});
+test('remaining-average mode solves all unknown results without pretending that this is an exact next score', () => {
+  const analysis = forecastAnalysis([record(8, 'written', { weight: 1 }), record(9, 'oral', { weight: 1 })], 12);
+  const config = nextScenario({ mode: 'remaining', future: [{ id: 'next', type: 'written', weight: 2 }, { id: 'other', type: 'oral', weight: 2 }], comparisonScore: 13 });
+  const result = getGradeForecast(analysis, config);
+  assert.equal(result.kind, 'remaining');
+  assert.equal(result.unknownCount, 2);
+  assert.equal(result.requiredScore, 13.75);
+  assert.equal(result.comparisonAverage, 11.5);
+  assert.ok(Math.abs(result.bestCaseAverage - 77 / 6) < 1e-9);
+  assert.equal(config.future[1].points, undefined);
+});
+test('next-score forecasting uses category weighting and a stated oral assumption transparently', () => {
+  const analysis = forecastAnalysis([record(8, 'written'), record(11, 'oral')], 11, { mode: 'category', weights: { written: 2, oral: 1 } });
+  const result = getGradeForecast(analysis, nextScenario());
+  assert.equal(result.requiredScore, 14);
+  assert.equal(result.achievable, true);
+});
+test('missing actual assessment weight or category prevents a precise next-score claim', () => {
+  const analysis = forecastAnalysis([record(8, 'written')]);
+  assert.deepEqual(getGradeForecast(analysis, nextScenario()).missingFields, ['weights']);
+  const invalid = { ...analysis, records: [{ ...analysis.records[0], date: '' }] };
+  assert.deepEqual(getGradeForecast(invalid, nextScenario()).missingFields, ['records']);
+});
+test('hypothetical comparison stays unknown until the user supplies a score, and normalization preserveszero', () => {
+  const analysis = forecastAnalysis([record(8, 'written', { weight: 1 })], 10);
+  assert.equal(getGradeForecast(analysis, nextScenario()).comparisonAverage, null);
+  assert.equal(normalizeGradeForecast({ comparisonScore: 0, future: [{ id: 'zero', type: 'oral', points: 0, weight: 2 }] }).future[0].points, 0);
+  assert.equal(normalizeGradeForecast({ comparisonScore: 0 }).comparisonScore, 0);
+});
+test('grade evidence describes category results and actual notes without inventing a skill diagnosis', () => {
+  const analysis = forecastAnalysis([record(4, 'written', { weight: 1, note: 'Lehrkraft: Belege fehlen' }), record(10, 'oral', { weight: 1 })], 10);
+  const evidence = getGradeEvidence(analysis);
+  assert.equal(evidence.contrast.written, 4);
+  assert.equal(evidence.contrast.oral, 10);
+  assert.deepEqual(evidence.feedback.map(entry => entry.note), ['Lehrkraft: Belege fehlen']);
+  assert.equal(evidence.teacherReviewSuggested, false);
+  assert.equal(getGradeEvidence(forecastAnalysis([record(4, 'written', { weight: 1 })])).needsFeedback, true);
+});
+
+test('a savedQ1 what-if setup is never silently used forQ2 results', () => {
+  const state = data([record(8, 'written', { weight: 1, semester: 'Q2' })]);
+  state.profile.schoolYear = 'Q2';
+  state.subjects[0].grading = { mode: 'weighted' };
+  const analysis = calculateSubject(state, 'math');
+  const result = getGradeForecast(analysis, nextScenario());
+  assert.deepEqual(result.missingFields, ['semester']);
+  assert.equal(result.requiredScore, null);
 });

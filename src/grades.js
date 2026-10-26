@@ -118,9 +118,64 @@ export function requiredFutureGrades({ records = [], target, future = [], gradin
   const assumptions = [`${known.length} erfasste und ${planned.length} angenommene zukünftige Leistung${planned.length === 1 ? '' : 'en'}.`, grading.mode === 'simple' ? 'Alle Leistungen zählen gleich.' : grading.mode === 'weighted' ? 'Die eingegebenen Einzelgewichte gelten.' : 'Deine Gewichte der Leistungsarten gelten; innerhalb einer Art zählen Leistungen gleich.', 'Unbekannte zukünftige Ergebnisse werden mit demselben Punktwert angesetzt.'];
   const minPossible = constant / denominator;
   const maxPossible = (constant + coefficient * 15) / denominator;
-  if (!coefficient) return { status: minPossible + 1e-9 >= desired ? 'already-met' : 'impossible', achievable: minPossible + 1e-9 >= desired, requiredScore: null, minimumWholePoints: null, minPossible, maxPossible, assumptions, explanation: `Alle angenommenen Ergebnisse stehen fest: Das Szenario ergibt ${minPossible.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte.` };
+  if (!coefficient) return { status: minPossible + 1e-9 >= desired ? 'already-met' : 'impossible', achievable: minPossible + 1e-9 >= desired, requiredScore: null, minimumWholePoints: null, minPossible, maxPossible, assumptions, calculation: { target: desired, denominator, constant, coefficient }, explanation: `Alle angenommenen Ergebnisse stehen fest: Das Szenario ergibt ${minPossible.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte.` };
   const requiredScore = Math.max(0, (desired * denominator - constant) / coefficient);
   const achievable = requiredScore <= 15 + 1e-9;
   const minimumWholePoints = Math.ceil(requiredScore - 1e-9);
-  return { status: achievable ? 'achievable' : 'impossible', achievable, requiredScore, minimumWholePoints, minPossible, maxPossible, assumptions, explanation: achievable ? `Du brauchst in den offenen Leistungen im Mittel mindestens ${requiredScore.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte. Mit jeweils ${minimumWholePoints} ganzen Punkten erreichst du das Ziel in diesem Szenario.` : `In diesem Szenario wären im Mittel ${requiredScore.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte nötig. Mehr als 15 sind nicht möglich; selbst mit 15 erreichst du höchstens ${maxPossible.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte.` };
+  return { status: achievable ? 'achievable' : 'impossible', achievable, requiredScore, minimumWholePoints, minPossible, maxPossible, assumptions, calculation: { target: desired, denominator, constant, coefficient }, explanation: achievable ? `Du brauchst in den offenen Leistungen im Mittel mindestens ${requiredScore.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte. Mit jeweils ${minimumWholePoints} ganzen Punkten erreichst du das Ziel in diesem Szenario.` : `In diesem Szenario wären im Mittel ${requiredScore.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte nötig. Mehr als 15 sind nicht möglich; selbst mit 15 erreichst du höchstens ${maxPossible.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte.` };
+}
+
+/** A saved what-if setup never becomes an actual assessment. */
+export function normalizeGradeForecast(value = {}) {
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const seen = new Set();
+  const future = (Array.isArray(input.future) ? input.future : []).slice(0, 8).map((entry, index) => {
+    const raw = entry && typeof entry === 'object' ? entry : {};
+    let id = typeof raw.id === 'string' ? raw.id.trim().slice(0, 80) : '';
+    if (!id || seen.has(id)) id = `future-${index}`;
+    seen.add(id);
+    return { id, type: GRADE_TYPES.includes(raw.type) ? raw.type : 'written', weight: positive(raw.weight), points: pointValue(raw.points) };
+  });
+  return { semester: SEMESTERS.includes(input.semester) || input.semester === 'all' ? input.semester : '', mode: input.mode === 'remaining' ? 'remaining' : 'next', future, comparisonScore: pointValue(input.comparisonScore) };
+}
+
+/** Solve one next score only when every other future result is explicitly fixed. */
+export function getGradeForecast(analysis, value = {}) {
+  const forecast = normalizeGradeForecast(value);
+  const records = analysis.records || [];
+  const future = forecast.future.map((entry, index) => ({ ...entry, points: index === 0 ? null : entry.points }));
+  const target = pointValue(analysis.target);
+  const grading = normalizeGrading(analysis.grading);
+  const calculate = entries => calculateGradeAverage([...records, ...entries], grading).average;
+  const bestCaseAverage = future.length && records.length ? calculate(future.map(entry => ({ ...entry, points: 15 }))) : null;
+  const comparisonAverage = forecast.comparisonScore !== null && future.length && records.length ? calculate(future.map(entry => ({ ...entry, points: entry.points ?? forecast.comparisonScore }))) : null;
+  const base = { forecast, future, bestCaseAverage, comparisonAverage, comparisonScore: forecast.comparisonScore, kind: forecast.mode, unknownCount: future.filter(entry => entry.points === null).length };
+  const missing = (explanation, missingFields) => ({ ...base, status: 'missing-data', achievable: null, requiredScore: null, minimumWholePoints: null, explanation, assumptions: [], missingFields });
+  if (!records.length || analysis.source === 'baseline' || records.some(record => !validDate(record.date) || !GRADE_TYPES.includes(record.type))) return missing('Für eine verlässliche Zielrechnung fehlen datierte Einzelleistungen mit Leistungsart. Ein Ausgangswert wird nicht als bestätigte Note verwendet.', ['records']);
+  if (target === null) return missing('Lege dein Fachziel zwischen 0 und 15 Punkten fest.', ['target']);
+  const analysisScope = analysis.semester || (analysis.periodLabel === 'Alle Halbjahre' ? 'all' : '');
+  if (forecast.semester && analysisScope && forecast.semester !== analysisScope) return missing('Dieses Szenario gehört zu einem anderen Halbjahr. Lege die verbleibenden Leistungen für den angezeigten Zeitraum fest.', ['semester']);
+  if (!future.length) return missing('Wie viele Leistungen stehen noch aus? Lege zuerst dein Szenario fest.', ['future']);
+  if (grading.mode === 'weighted' && [...records, ...future].some(entry => positive(entry.weight) === null)) return missing('Für dieses Szenario fehlt mindestens ein Einzelgewicht.', ['weights']);
+  if (forecast.mode === 'next' && future.slice(1).some(entry => entry.points === null)) return missing('Für eine eindeutige nächste Note fehlen die angenommenen Punkte der weiteren Leistungen. Trage sie ein oder berechne den nötigen Durchschnitt aller offenen Leistungen.', ['otherScores']);
+  const result = requiredFutureGrades({ records, target, future, grading });
+  const prefix = result.requiredScore !== null && forecast.mode === 'next' && result.achievable ? `In der nächsten Leistung brauchst du mindestens ${result.requiredScore.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Punkte. ` : '';
+  return { ...base, ...result, explanation: prefix ? `${prefix}Bei ganzen Punkten: mindestens ${result.minimumWholePoints}.` : result.explanation, missingFields: result.status === 'missing-data' ? ['grading'] : [], assumptions: [...result.assumptions, forecast.mode === 'next' ? 'Nur die nächste Leistung ist unbekannt; die späteren Ergebnisse sind deine festen Annahmen.' : 'Die unbewerteten zukünftigen Leistungen werden mit demselben Punktwert angesetzt.'] };
+}
+
+/** Describe recorded evidence without diagnosing a skill from a low number. */
+export function getGradeEvidence(analysis) {
+  const records = analysis.records || [];
+  const grading = normalizeGrading(analysis.grading);
+  const categories = GRADE_TYPES.flatMap(type => {
+    const selected = records.filter(record => record.type === type);
+    if (!selected.length) return [];
+    const result = calculateGradeAverage(selected, { mode: grading.mode === 'weighted' ? 'weighted' : 'simple' });
+    return [{ type, count: selected.length, average: result.average }];
+  });
+  const feedback = [...records].filter(record => record.note?.trim()).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3).map(record => ({ id: record.id, date: record.date, type: record.type, note: record.note.trim() }));
+  const written = categories.find(entry => entry.type === 'written');
+  const oral = categories.find(entry => entry.type === 'oral');
+  const contrast = written?.average != null && oral?.average != null ? { written: written.average, oral: oral.average, difference: oral.average - written.average } : null;
+  return { categories, feedback, contrast, needsFeedback: !feedback.length, teacherReviewSuggested: records.length >= 4 && analysis.trend?.direction === 'down' };
 }

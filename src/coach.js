@@ -6,7 +6,7 @@
 import { createStudyState, getStudyStats, normalizeStudy } from './study.js';
 import { getEventCandidates, getEventPlan, normalizeEvents } from './events.js';
 import { getRoadmap as buildRoadmap, getRoadmapPriorities, taskCategoryForMilestone } from './roadmap.js';
-import { calculateSubject, normalizeAcademicGrade, normalizeGrading } from './grades.js';
+import { calculateSubject, normalizeAcademicGrade, normalizeGrading, normalizeGradeForecast } from './grades.js';
 import { getSubjectPriorities } from './recommendations.js';
 import { normalizeLessons, lessonBlocks } from './timetable.js';
 import { normalizeIELTS, getIELTSCandidates, getIELTSSummary } from './ielts.js';
@@ -110,7 +110,7 @@ function normalProfile(value = {}) {
 function normalSubject(subject) {
   if (!subject || !text(subject.id, 150) || !text(subject.name, 150)) return null;
   return { id: text(subject.id, 150), name: text(subject.name, 150), level: subject.level === 'LK' ? 'LK' : 'GK', written: number(subject.written, null, 0, 15), oral: number(subject.oral, null, 0, 15), baselineWritten: number(Object.hasOwn(subject, 'baselineWritten') ? subject.baselineWritten : subject.written, null, 0, 15), baselineOral: number(Object.hasOwn(subject, 'baselineOral') ? subject.baselineOral : subject.oral, null, 0, 15), target: number(subject.target, Object.hasOwn(subject, 'target') ? null : 10, 0, 15), weakTopics: words(subject.weakTopics), enabled: subject.enabled !== false,
-    grading: normalizeGrading(subject.grading), priority: ['auto', 'high', 'low'].includes(subject.priority) ? subject.priority : 'auto', difficulty: integer(subject.difficulty, null, 1, 5) };
+    grading: normalizeGrading(subject.grading), forecast: normalizeGradeForecast(subject.forecast), priority: ['auto', 'high', 'low'].includes(subject.priority) ? subject.priority : 'auto', difficulty: integer(subject.difficulty, null, 1, 5) };
 }
 function normalExam(exam) {
   if (!exam || !text(exam.id, 150) || !text(exam.title, 300) || !isDateKey(exam.date)) return null;
@@ -646,6 +646,11 @@ function makeCandidates(state, date) {
   }).sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
 }
 
+function hasTutorWork(state, task) {
+  const session = state.learning?.sessions?.find(item => item.taskId === task.id);
+  return !!(session && (session.startedAt || session.completedAt || Object.values(session.answers || {}).some(answer => typeof answer === 'string' && answer.trim())));
+}
+
 export function ensureDailyPlan(state, date, referenceDate = date) {
   calendar(date);
   calendar(referenceDate);
@@ -656,7 +661,7 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
   // A saved draft that could not fit was parked rather than deliberately
   // skipped. Reconsider it when the allowance changes, without duplicating
   // its stable ID or losing the writing attached to it.
-  const existing = state.tasks.filter(task => task.date === date && (!task.skipped || (task.origin === 'generated' && !dismissed.has(task.id) && (task.notes?.trim() || task.selfReview?.length))));
+  const existing = state.tasks.filter(task => task.date === date && (!task.skipped || (task.origin === 'generated' && !dismissed.has(task.id) && (task.notes?.trim() || task.selfReview?.length || hasTutorWork(state, task)))));
   const signature = planSignature(state, date);
   const oldGenerated = existing.filter(task => task.origin === 'generated');
   if (oldGenerated.length && oldGenerated.every(task => task.planSignature === signature)) return state;
@@ -667,7 +672,7 @@ export function ensureDailyPlan(state, date, referenceDate = date) {
   // an exam or timetable must not silently throw that work away.
   const availableCandidates = makeCandidates(state, date);
   const retained = existing.filter(task => task.origin === 'custom' || task.completed || task.id === activeTaskId);
-  const drafts = existing.filter(task => task.origin === 'generated' && !task.completed && task.id !== activeTaskId && (task.notes?.trim() || task.selfReview?.length)).map(task => {
+  const drafts = existing.filter(task => task.origin === 'generated' && !task.completed && task.id !== activeTaskId && (task.notes?.trim() || task.selfReview?.length || hasTutorWork(state, task))).map(task => {
     const updated = availableCandidates.find(item => `plan-${date}-${item.key}` === task.id);
     // Keep the action and its writing stable, while allowing a corrected goal
     // link from an engine upgrade to replace obsolete metadata.
@@ -769,7 +774,7 @@ function planSignature(state, date) {
     testPlans: (testPlans || []).map(({ id, name, status, targetDate, targetScore }) => ({ id, name, status, targetDate, targetScore })),
   };
   const input = canonicalJSON({
-    engineVersion: 8, date, profile: planningProfile, subjects: state.subjects, grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), sat: normalizeSAT(state.sat), learning: normalizeLearning(state.learning),
+    engineVersion: 9, date, profile: planningProfile, subjects: state.subjects.map(({ forecast, ...subject }) => subject), grades: state.grades, exams: state.exams, ielts: normalizeIELTS(state.ielts), sat: normalizeSAT(state.sat), learning: { attempts: normalizeLearning(state.learning).attempts },
     universities: state.universities, activities: state.activities, events: state.events || [], schedule: state.schedule,
     roadmapConfirmed: state.roadmapCompleted,
     // A Sunday review guides the following week. Reflection text, save time,
@@ -1062,7 +1067,7 @@ export function toggleTask(state, id, now = new Date()) {
 export function saveTaskNotes(state, id, notes) { return { ...state, tasks: state.tasks.map(task => task.id === id ? { ...task, notes: text(notes, 5000) } : task) }; }
 export function saveTaskReview(state, id, criterionIds) { return { ...state, tasks: state.tasks.map(task => task.id === id ? { ...task, selfReview: [...new Set(words(criterionIds).map(value => value.slice(0, 150)))].slice(0, 12) } : task) }; }
 export function addTask(state, task) {
-  const retained = state.tasks.filter(item => item.date === task.date && !item.skipped && (item.origin === 'custom' || item.completed || item.notes?.trim() || item.selfReview?.length || item.id === state.study?.active?.taskId));
+  const retained = state.tasks.filter(item => item.date === task.date && !item.skipped && (item.origin === 'custom' || item.completed || item.notes?.trim() || item.selfReview?.length || hasTutorWork(state, item) || item.id === state.study?.active?.taskId));
   if (!task.id && retained.length >= 5) throw new TypeError('Keep today focused: move or remove an action before adding a sixth.');
   const old = state.tasks.find(item => item.id === task.id);
   const record = requireRecord(normalTask({ ...old, ...task, id: task.id || uid('task'), origin: 'custom', completed: old?.completed || false, completedAt: old?.completedAt || null }), 'A task needs a title and valid date.');
@@ -1082,7 +1087,7 @@ export function moveTask(state, id, date) {
   if (!task || task.date === date) return state;
   if (task.completed) throw new TypeError('Abgeschlossene Aufgaben bleiben im Verlauf.');
   if (state.study?.active?.taskId === id) throw new TypeError('Beende zuerst die aktive Lerneinheit.');
-  const retained = state.tasks.filter(item => item.date === date && !item.skipped && (item.origin === 'custom' || item.completed || item.notes?.trim() || item.selfReview?.length));
+  const retained = state.tasks.filter(item => item.date === date && !item.skipped && (item.origin === 'custom' || item.completed || item.notes?.trim() || item.selfReview?.length || hasTutorWork(state, item)));
   if (retained.length >= 5) throw new TypeError('An diesem Tag sind bereits fünf feste Aufgaben. Wähle einen anderen Tag.');
   if (task.satSkill === 'full') {
     const availability = getAvailability(state, date);

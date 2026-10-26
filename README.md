@@ -15,12 +15,11 @@ Existing saved profiles keep their actual grades, timetable and history.
 
 ## The experience
 
-- **Heute:** a personal daily mission, estimated course average and target,
-  biggest improvement opportunity, three immediately visible actions, and the next
-  relevant date. Additional planned actions remain behind a disclosure. Task
-  cards show an objective, duration and expected result;
-  detailed reasons, learning steps and materials open on demand. Short days
-  have fewer tasks and zero-minute days can remain free.
+- **Heute:** a compact charcoal mission, one academic priority, a distinct next-exam
+  countdown and grade-improvement opportunity, then three actionable task rows.
+  Unfinished work comes first. More tasks, history and daily context remain
+  available behind disclosures. Subject averages and target calculations live
+  in Fortschritt; tapping an improvement opportunity opens that subject directly.
 - **Lernplan:** weekly priorities, school lessons, study allowances and fixed
   commitments, exams, a shared deadlines timeline and separate USA/Germany
   university roadmaps. Lessons support rooms, teachers and alternating A/B
@@ -32,8 +31,7 @@ Existing saved profiles keep their actual grades, timetable and history.
 - **Profil:** academic background, goals, subjects, university shortlist,
   activities, projects and work experience, evidence and specific next
   development actions. IELTS and SAT share a secondary preparation section.
-  Study windows,
-  commitments, theme and portable JSON backups are editable here.
+  Study windows, commitments, theme and portable JSON backups are editable here.
 
 Four optional setup steps create a first plan without requiring every field.
 Blank grades and missing examination dates stay blank. The initial study
@@ -81,11 +79,16 @@ records and original undated starting values remain available as clearly
 labelled orientation; they are not invented assessments or silently mixed
 with dated results.
 
-Subject details answer **“Was brauche ich noch?”** using the number, kind and
-weight of future assessments you select. Explore the next result, multiple
-remaining results or an additional oral what-if result. Assumptions and the
-calculation are visible. Requirements above 15 points are explained as
-unachievable in that scenario; hypothetical results never become real grades.
+Subject details immediately show **the minimum next score**, target, current
+calculated average and next saved exam. Configure the remaining assessments and
+actual weighting once; the hypothetical setup persists by semester. An undated
+starting estimate never supplies fictional assessment data. Missing records,
+weights or later-result assumptions keep the answer open.
+
+Choose the next unknown result or the mean required across remaining unknown
+results. Detailed arithmetic, best-case outcomes and a user-entered comparison
+stay expandable. Requirements above 15 are explicitly impossible under those
+assumptions. Future scenarios never become actual grades or change study priorities.
 
 An explainable priority engine combines actual target gaps, approaching
 assessments and deadlines, LK study importance, recent results, practice
@@ -93,31 +96,32 @@ history, difficulty, personal preferences and available time. Manual subject
 priorities can override the normal emphasis. A grade or timetable change
 updates the plan without deleting saved work or rewriting previous days.
 
-## Learning and IELTS
+## Interactive learning
 
-Opening a learning task shows what to learn, why, the first step, timed
-phases, expected result, materials and answer-checking guidance. Selected
-original practice covers exponential functions, RC discharge and language
-writing; other topics use current course material and relevant educational
-sources. Missing exam topics are explicitly provisional. The app never
-invents textbook page numbers or claims its practice matches an unknown
-school paper.
+Opening a task initially shows its topic, duration and first actual exercise.
+**Lernen starten** opens a sequence: short explanation → one question at a time →
+model answer and checking criteria → a second attempt on uncertain questions →
+a saved mistake and completion. Answers and position autosave independently of
+older notes. Reviewing or changing priorities does not discard started work.
+Existing reflections remain accessible in a collapsed history.
 
-Save an answer, a mistake and a confidence reflection to schedule a review.
-A short session is described as partial practice, not a completed full exam.
-Solutions and writing rubrics support self-checking; the app does not assign
-an automatic school grade or IELTS band. Repeated difficulty can prompt a
-specific teacher-feedback recommendation rather than an automatic tutoring
-purchase suggestion.
+Seventeen authored modules cover four English topics (including Brown v. Board
+of Education), three Mathematics topics, two German writing tasks with original
+texts, two Physics topics, all four IELTS skills, and two SAT skills. Each has
+actual questions, solutions, explanations and a review. Short sessions reduce
+quantity; they do not falsely claim a full exam. IELTS Listening uses a device
+English speech voice, is labelled synthetic practice, and explains when audio is
+unavailable. Full digital SAT simulations continue in official Bluebook material.
 
-**IELTS Academic** supports an optional examination date, overall and
-four-skill targets, estimated starting levels, weekly preparation allowance,
-recurring mistakes and dated results. Official scores, mock tests and
-self-assessments are distinct. A complete four-skill result uses IELTS overall
-half-band rounding; completing preparation tasks does not create a band
-score or prove proficiency. Tasks address skill gaps and time remaining
-within the same school workload budget. SAT and Cambridge remain editable
-test plans and preparation decisions, not equally comprehensive test courses.
+Known examination topics guide selection. Missing topics require a simple choice;
+unsupported topics explicitly say the interactive lesson is incomplete. The app
+does not silently substitute unrelated exercises, invent textbook pages or claim
+coverage of the complete Hessen curriculum. Extra resources remain optional.
+
+Self-checks are **not automatic correction, school marks or IELTS bands**.
+Mistakes schedule earlier reviews of the same module and prioritize uncertain
+questions. Repeated difficulty can prompt targeted teacher feedback. No paid AI
+API, sign-in or admissions prediction is required.
 
 ## University preparation
 
@@ -173,6 +177,7 @@ Then run the current browser suite in another terminal:
 ```sh
 python3 tests/coach_upgrade_browser.py --url http://127.0.0.1:4176
 python3 tests/ux_repair_browser.py --url http://127.0.0.1:4176
+python3 tests/personal_tutor_browser.py --url http://127.0.0.1:4176
 python3 tests/responsive_browser.py --url http://127.0.0.1:4176
 ```
 

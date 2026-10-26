@@ -94,9 +94,15 @@ try:
             context.set_offline(True)
             page.reload(wait_until='domcontentloaded')
             expect(page.get_by_role('heading', name='Heute', exact=True)).to_be_visible()
-            # Verify the actual interface font, including its precached bytes,
-            # without requiring a removed decorative font from an old design.
-            families = page.locator('body').evaluate('element => [getComputedStyle(element).fontFamily.split(",")[0].trim().replace(/^[\'"]|[\'"]$/g, "")]')
+            # Native system fonts have no FontFace objects to load. Verify the
+            # bundled fallback families actually present in the interface stack,
+            # including their precached bytes while the browser is offline.
+            families = page.locator('body').evaluate("""element => {
+              const clean = name => name.trim().replace(/^[\\'\\"]|[\\'\\"]$/g, '');
+              const stack = getComputedStyle(element).fontFamily.split(',').map(clean);
+              return [...new Set([...document.fonts].map(face => clean(face.family)).filter(name => stack.includes(name)))];
+            }""")
+            assert families, 'The interface must retain its bundled offline font fallback.'
             for family in families:
                 loaded=page.evaluate('async family => (await document.fonts.load(`16px "${family}"`)).map(f=>f.status)',family)
                 assert loaded and all(status=='loaded' for status in loaded), (prefix,family,loaded)

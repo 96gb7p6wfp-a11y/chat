@@ -137,7 +137,7 @@ class Suite:
         assert len(today_tasks(page)) in range(1, 6)
         assert sum(task['minutes'] for task in today_tasks(page)) <= 120
         expect(page.get_by_role('region', name='Deine heutige Mission')).to_be_visible()
-        expect(page.get_by_role('region', name='Dein Lernstand')).to_be_visible()
+        assert page.locator('[data-testid="daily-tasks"] .coach-task-open').count() <= 3
         expect(page.get_by_role('region', name='Deine größte Lernchance')).to_be_visible()
         expect(page.get_by_role('region', name='Nächste Termine')).to_be_visible()
         no_overflow(page)
@@ -148,8 +148,8 @@ class Suite:
         page.get_by_role('button', name='Später einrichten', exact=True).click()
         wait_state(page, 'data.onboardingCompleted === true')
         assert all(subject['written'] is None and subject['oral'] is None for subject in state(page)['subjects'])
-        snapshot = page.get_by_role('region', name='Dein Lernstand')
-        expect(snapshot).to_contain_text('Trage eine aktuelle Note ein')
+        navigate(page, 'Fortschritt')
+        expect(page.locator('.academic-grades')).to_contain_text('Noch keine Ergebnisse')
         assert not state(page)['ielts']['examDate']
         no_overflow(page)
 
@@ -158,6 +158,7 @@ class Suite:
         navigate(page, 'Fortschritt')
         page.get_by_role('button', name='Mathematik: Noten und Ziel berechnen', exact=True).click()
         for points, kind, date in [('6', 'written', '2026-10-18'), ('12', 'oral', TODAY)]:
+            expand(page.get_by_role('dialog'), 'Noten und Verlauf')
             page.get_by_role('dialog').get_by_role('button', name='Note', exact=True).click()
             dialog = page.get_by_role('dialog', name='Note eintragen')
             dialog.get_by_label('Punkte (0–15)', exact=True).fill(points)
@@ -169,9 +170,11 @@ class Suite:
         expect(detail.locator('.academic-subject-score')).to_contain_text('9')
         expand(detail, 'Zielnote berechnen')
         detail.get_by_label('Offene Leistungen', exact=True).select_option('1')
-        detail.get_by_label('Ziel im Szenario', exact=True).fill('10')
         expect(detail.locator('.forecast-result')).to_contain_text('mindestens 12 Punkte')
-        detail.get_by_label('Ziel im Szenario', exact=True).fill('15')
+        detail.get_by_role('button', name='Noten und Ziele für Mathematik einstellen', exact=True).click()
+        page.get_by_label('Mein Fachziel · Punkte', exact=True).fill('15')
+        page.get_by_role('button', name='Einstellungen speichern', exact=True).click()
+        detail = page.get_by_role('dialog', name='Mathematik', exact=True)
         expect(detail.locator('.forecast-result')).to_contain_text('Mehr als 15 sind nicht möglich')
         expect(detail.locator('.forecast-result')).to_contain_text('SO NICHT ERREICHBAR')
         assert len(state(page)['grades']) == 2
@@ -186,9 +189,11 @@ class Suite:
         page.get_by_role('button', name='Mathematik: Noten und Ziel berechnen', exact=True).click()
         page.get_by_role('button', name='Noten und Ziele für Mathematik einstellen', exact=True).click()
         page.get_by_label('Berechnung', exact=True).select_option('weighted')
+        page.get_by_label('Mein Fachziel · Punkte', exact=True).fill('10')
         page.get_by_role('button', name='Einstellungen speichern', exact=True).click()
         expect(page.get_by_role('dialog')).to_contain_text('Gewicht')
         for points, date, weight in [('6', '2026-10-18', '2'), ('12', TODAY, '1')]:
+            expand(page.get_by_role('dialog'), 'Noten und Verlauf')
             page.get_by_role('button', name=f'Note {points} vom {date} bearbeiten', exact=True).click()
             page.get_by_label('Gewicht dieser Leistung', exact=True).fill(weight)
             page.get_by_role('button', name='Note speichern', exact=True).click()
@@ -196,9 +201,8 @@ class Suite:
         expect(dialog.locator('.academic-subject-score')).to_contain_text('8')
         expand(dialog, 'Zielnote berechnen')
         dialog.get_by_label('Offene Leistungen', exact=True).select_option('1')
-        dialog.get_by_label('Ziel im Szenario', exact=True).fill('10')
         expect(dialog.locator('.forecast-result')).to_contain_text('fehlt')
-        dialog.get_by_label('Gewicht jeder offenen Leistung', exact=True).fill('2')
+        dialog.get_by_label('Gewicht der nächsten Leistung', exact=True).fill('2')
         expect(dialog.locator('.forecast-result')).to_contain_text('mindestens 13 Punkte')
         close_dialog(page)
         page.reload(wait_until='networkidle')
@@ -210,9 +214,11 @@ class Suite:
         page = self.page(seed=self.with_grades)
         navigate(page, 'Fortschritt')
         page.get_by_role('button', name='Mathematik: Noten und Ziel berechnen', exact=True).click()
+        expand(page.get_by_role('dialog'), 'Noten und Verlauf')
         page.get_by_role('button', name=f'Note 12 vom {TODAY} bearbeiten', exact=True).click()
         page.get_by_label('Halbjahr', exact=True).select_option('Q2')
         page.get_by_role('button', name='Note speichern', exact=True).click()
+        expand(page.get_by_role('dialog'), 'Noten und Verlauf')
         page.get_by_label('Halbjahr anzeigen', exact=True).select_option('Q1')
         expect(page.get_by_role('dialog').locator('.academic-subject-score')).to_contain_text('6')
         page.get_by_label('Halbjahr anzeigen', exact=True).select_option('Q2')
@@ -244,7 +250,8 @@ class Suite:
         tasks = today_tasks(page)
         assert any(task.get('examId') == exam['id'] for task in tasks)
         assert tasks[0].get('subjectId') == 'mathematics'
-        expect(page.get_by_role('region', name='Nächste Termine')).to_contain_text('Mathematik LK · Testfall')
+        expect(page.get_by_role('region', name='Nächste Termine')).to_contain_text('Mathematik')
+        expect(page.get_by_role('region', name='Nächste Termine')).to_contain_text('26. Oktober')
         no_overflow(page)
 
     def timetable_blocks_lessons_and_detects_conflicts(self):
@@ -374,24 +381,31 @@ class Suite:
 
     def guided_learning_reflection_and_completion(self):
         page = self.personal_page()
-        tasks = today_tasks(page)
-        academic = next(task for task in tasks if task.get('subjectId') and not task.get('roadmapStepId'))
-        open_task(page, academic["title"])
-        expect(page.get_by_role('region', name='So lernst du')).to_be_visible()
-        assert page.locator('.guided-phases li').count() >= 3
-        expect(page.locator('.guided-result')).not_to_have_text('')
-        expand(page.get_by_role('dialog'), 'Ergebnis & Wiederholung')
-        page.get_by_label('Deine Antwort oder dein Lösungsweg', exact=True).fill('Testantwort: Behauptung, Beleg und Deutung hängen zusammen.')
-        page.get_by_label('Ein Fehler oder eine Erkenntnis', exact=True).fill('Testfehler: Deutung genauer begründen.')
-        page.get_by_role('button', name='Mit Mühe', exact=True).click()
-        page.get_by_role('button', name='Reflexion speichern', exact=True).click()
+        academic = next(task for task in today_tasks(page) if task.get('subjectId') and not task.get('roadmapStepId'))
+        open_task(page, academic['title'])
+        expect(page.get_by_role('region', name='Interaktive Lerneinheit')).to_be_visible()
+        if page.get_by_label('Lernthema wählen', exact=True).is_visible():
+            selector = page.get_by_label('Lernthema wählen', exact=True)
+            selector.select_option(selector.locator('option:not([value=""])').first.get_attribute('value'))
+        page.get_by_role('button', name='Lernen starten', exact=True).click()
+        page.get_by_role('button', name='Zu den Aufgaben', exact=True).click()
+        for index in range(12):
+            page.get_by_label('Deine Antwort', exact=True).fill(f'Testantwort {index}: eigener Versuch mit nachvollziehbarer Begründung.')
+            page.get_by_role('button', name='Antwort prüfen', exact=True).click()
+            expect(page.locator('.tutor-model-answer')).not_to_have_text('')
+            page.get_by_role('button', name='Mit Mühe' if index == 0 else 'Selbstständig', exact=True).click()
+            if page.get_by_role('button', name='Zur Wiederholung', exact=True).count():
+                page.get_by_role('button', name='Zur Wiederholung', exact=True).click()
+                break
+            page.get_by_role('button', name='Nächste Aufgabe', exact=True).click()
+        if page.get_by_label('Dein zweiter Versuch · 1', exact=True).count():
+            page.get_by_label('Dein zweiter Versuch · 1', exact=True).fill('Zweiter eigener Versuch mit geprüftem Rechenweg und korrigierter Begründung.')
+        page.get_by_label('Dein wichtigster Fehler', exact=True).fill('Testfehler: die Begründung und den Lösungsweg genauer prüfen.')
+        page.get_by_role('button', name='Einheit beenden', exact=True).click()
         wait_state(page, 'data.learning.attempts.length === 1')
         attempt = state(page)['learning']['attempts'][0]
-        assert attempt['nextReviewDate'] > TODAY
-        assert 'Testfehler' in attempt['mistake']
-        assert state(page)['grades'] == []
-        assert state(page)['ielts']['scores'] == []
-        page.get_by_role('button', name='Aufgabe abschließen', exact=True).click()
+        assert attempt['nextReviewDate'] > TODAY and 'Testfehler' in attempt['mistake']
+        assert state(page)['grades'] == [] and state(page)['ielts']['scores'] == []
         wait_state(page, f'data.tasks.some(task => task.id === {json.dumps(academic["id"])} && task.completed)')
         navigate(page, 'Fortschritt')
         expect(page.locator('body')).to_contain_text('1 /')
@@ -401,8 +415,8 @@ class Suite:
         page = self.personal_page()
         task = next(task for task in today_tasks(page) if task.get('subjectId') and not task.get('roadmapStepId'))
         open_task(page, task["title"])
-        expand(page.get_by_role('dialog'), 'Ergebnis & Wiederholung')
-        page.get_by_label('Deine Antwort oder dein Lösungsweg', exact=True).fill('Dieser Entwurf darf beim Neuplanen nicht verschwinden.')
+        expand(page.get_by_role('dialog'), 'Notizen & Entwürfe')
+        page.get_by_label('Deine gespeicherten Notizen', exact=True).fill('Dieser Entwurf darf beim Neuplanen nicht verschwinden.')
         expand(page.get_by_role('dialog'), 'Aufgabe anpassen')
         page.get_by_role('button', name='Heute auslassen', exact=True).click()
         wait_state(page, f'data.tasks.some(task => task.id === {json.dumps(task["id"])} && task.skipped)')
@@ -604,7 +618,7 @@ class Suite:
         navigate(page, 'Heute')
         linked = next(task for task in today_tasks(page) if task.get('roadmapItemId'))
         open_task(page, linked['title'])
-        expand(page.get_by_role('dialog'), 'Dein langfristiges Ziel')
+        expand(page.get_by_role('dialog'), 'Aufgabe & Planung')
         page.get_by_role('button', name='Zum Studienweg', exact=True).click()
         expect(page.locator(f'[data-milestone-id="{linked["roadmapItemId"]}"]')).to_be_attached()
         assert len(state(page)['roadmapCompleted']) == 2
@@ -616,8 +630,8 @@ class Suite:
         task = original[0]
         open_task(page, task['title'])
         dialog = page.get_by_role('dialog')
-        expand(dialog, 'Ergebnis & Wiederholung')
-        dialog.get_by_label('Deine Antwort oder dein Lösungsweg', exact=True).fill('Testentwurf: diesen Lösungsweg morgen weiter prüfen.')
+        expand(dialog, 'Notizen & Entwürfe')
+        dialog.get_by_label('Deine gespeicherten Notizen', exact=True).fill('Testentwurf: diesen Lösungsweg morgen weiter prüfen.')
         close_dialog(page)
         wait_state(page, 'data.tasks.some(task => task.notes.includes("Testentwurf"))')
         page.clock.set_system_time(datetime(2026, 10, 20, 7, 0, tzinfo=timezone.utc))

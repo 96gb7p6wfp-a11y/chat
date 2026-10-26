@@ -102,11 +102,12 @@ function RevisionTimeline({ stages }) {
   return <div className="revision-timeline">{stages.map((stage, index) => <div className={`revision-stage ${stage.completed ? 'completed' : ''}`} key={stage.id || `${stage.date}-${index}`}><span className="timeline-dot">{stage.completed && <Check size={12} />}</span><div className="grow"><span className="field-help">{stage.date ? formatDate(stage.date, DATE_OPTIONS) : `Schritt ${index + 1}`}</span><strong>{stage.title || stage.label}</strong>{(stage.description || stage.reason) && <p className="muted small">{stage.description || stage.reason}</p>}{stage.minutes > 0 && <span className="field-help">{stage.remainingMinutes ?? stage.minutes} min{stage.completed ? ' · erledigt' : ' offen'}</span>}</div></div>)}</div>;
 }
 
-function ExamPreparation({ data, exam, today, onClose, onEdit, onToday }) {
+function ExamPreparation({ data, exam, today, onClose, onEdit, onToday, onLearn }) {
   const subject = data.subjects.find(item => item.id === exam.subjectId);
   const { stages, remaining, scheduled, next, topics, readiness } = examPreparation(data, exam, today);
   const task = scheduled || (next && { id: `preview-${next.id}`, examId: exam.id, subjectId: exam.subjectId, title: next.title, date: today, minutes: next.remainingMinutes || next.minutes, reason: next.reason, revisionStage: next.stage, category: 'academics', steps: [next.reason] });
   const session = task && topics.length ? getGuidedSession(data, task, today) : null;
+  const tutor = session?.tutor;
   const completed = stages.filter(stage => stage.completed).length;
   const weakTopics = subject?.weakTopics || [];
   const isPast = exam.date < today;
@@ -115,7 +116,7 @@ function ExamPreparation({ data, exam, today, onClose, onEdit, onToday }) {
     <p className="field-help">{completed} von {stages.length} Bausteinen erledigt · {readiness}% Vorbereitung. Das bewertet deine Lernschritte, nicht dein Können.</p>
     {!topics.length ? <section className="exam-coach-next"><span className="field-help">ZUERST KLÄREN</span><h3>Welche Themen werden geprüft?</h3><p>Übernimm die Themen und das Prüfungsformat aus deinem Kurs oder frage deine Lehrkraft. Bis dahin bleibt die Vorbereitung vorläufig.</p><Button onClick={onEdit}>Prüfungsthemen ergänzen</Button></section> : <>
       <div className="topic-tags" aria-label="Bestätigte Prüfungsthemen">{topics.map(topic => <span className="chip" key={topic}>{topic}</span>)}</div>
-      {session && !isPast && <section className="exam-coach-next"><span className="field-help">{scheduled ? 'HEUTE EINGEPLANT' : 'NÄCHSTER BAUSTEIN'}</span><h3>{session.objective}</h3><p>{session.expectedResult}</p><span className="field-help">{task.minutes} min · {session.method}</span><details className="product-details"><summary>So bereitest du dich vor</summary><ol className="exam-coach-method">{session.phases.map((phase, index) => <li key={index}><strong>{phase.title} · {phase.minutes} min</strong><p>{phase.action}</p></li>)}</ol>{session.resources?.map(resource => <p className="muted small" key={resource.title}>{resource.url ? <a className="text-link" href={resource.url} target="_blank" rel="noreferrer">{resource.title} <ArrowRight size={13} /></a> : <strong>{resource.title}</strong>}<br />{resource.hint}</p>)}</details>{scheduled ? <Button onClick={onToday}>Heutige Vorbereitung öffnen <ArrowRight size={15} /></Button> : <p className="field-help">Dein Tagesplan verteilt diese Bausteine gemeinsam mit Unterricht, anderen Prüfungen und Erholung.</p>}</section>}
+      {session && !isPast && <section className="exam-coach-next"><span className="field-help">{scheduled ? 'HEUTE EINGEPLANT' : 'NÄCHSTER BAUSTEIN'}</span>{tutor?.status === 'ready' ? <><h3>{tutor.title}</h3><p>{tutor.firstExercise || tutor.questions?.[0]?.prompt}</p><span className="field-help">{task.minutes} Min. · Aufgaben mit Lösungen und Selbstprüfung</span>{scheduled && onLearn ? <Button onClick={() => onLearn(scheduled)}>Lerneinheit öffnen <ArrowRight size={15}/></Button> : <Button onClick={onToday}>Im Tagesplan einordnen <ArrowRight size={15}/></Button>}</> : <><h3>{tutor?.status === 'unsupported' ? 'Interaktive Übung noch nicht verfügbar' : 'Ein konkretes Übungsmodul wählen'}</h3><p>{tutor?.unavailableReason || 'Öffne die Aufgabe im Tagesplan und wähle ein passendes Thema.'}</p>{scheduled && onLearn ? <Button onClick={() => onLearn(scheduled)}>Thema wählen <ArrowRight size={15}/></Button> : <Button onClick={onToday}>Tagesplan öffnen <ArrowRight size={15}/></Button>}</>}</section>}
     </>}
     {!!weakTopics.length && <details className="product-details"><summary>Persönliche Schwächen im Blick</summary><p className="muted small">{weakTopics.join(' · ')}</p><p className="field-help">Deine eingetragenen Schwächen sind keine bestätigte Themenliste für diese Prüfung. Übe sie, wenn sie tatsächlich geprüft werden.</p></details>}
     <details className="product-details"><summary>Gesamter Vorbereitungsplan</summary><p className="field-help">{remaining.reduce((sum, stage) => sum + (stage.remainingMinutes ?? stage.minutes), 0)} min offene Bausteine. Die Daten sind Lernziele; dein Tagesplan berücksichtigt die tatsächlich verfügbare Zeit.</p><RevisionTimeline stages={stages} /></details>
@@ -148,7 +149,7 @@ function ActivityForm({ activity, today, onSave, onClose }) {
   </form></Modal>;
 }
 
-export default function Plan({ data, today, onChange, notify, onSelectDay, onOpenProfile, initialView = 'week', initialPathway, onOpenSchoolImport }) {
+export default function Plan({ data, today, onChange, notify, onSelectDay, onOpenProfile, initialView = 'week', initialPathway, onOpenSchoolImport, onOpenTask }) {
   const [tab, setTab] = useState(initialView);
   const [week, setWeek] = useState(startOfWeek(today));
   const [selectedDay, setSelectedDay] = useState(today);
@@ -248,7 +249,7 @@ export default function Plan({ data, today, onChange, notify, onSelectDay, onOpe
       {scheduleError && <p className="form-error" role="alert">{scheduleError}</p>}
     </div>}
 
-    {modal?.type === 'preparation' && <ExamPreparation data={data} exam={modal.exam} today={today} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'exam', exam: modal.exam })} onToday={() => { setModal(null); onSelectDay(today); }} />}
+    {modal?.type === 'preparation' && <ExamPreparation data={data} exam={modal.exam} today={today} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'exam', exam: modal.exam })} onToday={() => { setModal(null); onSelectDay(today); }} onLearn={onOpenTask ? task => { setModal(null); onOpenTask(task); } : undefined} />}
     {modal?.type === 'exam' && <ExamForm key={modal.exam?.id || 'new'} data={data} exam={modal.exam} today={today} onClose={() => setModal(null)} onSave={(exam) => { onChange((current) => saveExam(current, exam)); setModal(null); notify?.('Prüfung gespeichert. Dein Lernplan wurde angepasst.'); }} />}
     {modal?.type === 'activity' && <ActivityForm activity={modal.activity} today={today} onClose={() => setModal(null)} onSave={saveFixedActivity} />}
     {deleteExamId && <Modal title="Prüfung entfernen?" onClose={() => setDeleteExamId(null)}><p className="muted">Künftige Vorbereitung entfällt. Bereits erledigte Aufgaben bleiben erhalten.</p><div className="sheet-footer"><Button variant="secondary" onClick={() => setDeleteExamId(null)}>Behalten</Button><Button onClick={() => { onChange((current) => removeExam(current, deleteExamId)); setDeleteExamId(null); notify?.('Prüfung entfernt.'); }}>Prüfung entfernen</Button></div></Modal>}

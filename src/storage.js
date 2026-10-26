@@ -225,6 +225,18 @@ function validateCurrent(value) {
     choice(record.priority, `${path}.priority`, ['auto', 'high', 'low']);
     choice(record.priorityOverride, `${path}.priorityOverride`, ['auto', 'high', 'low']);
     number(record.difficulty, `${path}.difficulty`, 1, 5);
+    if (record.forecast !== undefined) {
+      if (!object(record.forecast)) fail(`${path}.forecast must be an object.`);
+      choice(record.forecast.semester, `${path}.forecast.semester`, ['', 'Q1', 'Q2', 'Q3', 'Q4', 'all'], { optional: false });
+      choice(record.forecast.mode, `${path}.forecast.mode`, ['next', 'remaining'], { optional: false });
+      number(record.forecast.comparisonScore, `${path}.forecast.comparisonScore`, 0, 15);
+      list(record.forecast.future, `${path}.forecast.future`, (entry, entryPath) => {
+        text(entry.id, `${entryPath}.id`, { required: true, max: 80 });
+        choice(entry.type, `${entryPath}.type`, ['written', 'oral', 'participation', 'presentation', 'other'], { optional: false });
+        number(entry.weight, `${entryPath}.weight`, Number.EPSILON, 100000);
+        number(entry.points, `${entryPath}.points`, 0, 15);
+      }, { max: 8 });
+    }
     if (record.grading !== undefined) {
       if (!object(record.grading)) fail(`${path}.grading must be an object.`);
       choice(record.grading.mode, `${path}.grading.mode`, ['simple', 'weighted', 'category'], { optional: false });
@@ -396,6 +408,25 @@ function validateSAT(value) {
 function validateLearning(value) {
   if (value === undefined) return;
   if (!object(value)) fail('learning must be an object.');
+  const taskIds = new Set();
+  list(value.sessions, 'learning.sessions', (session, path) => {
+    text(session.taskId, `${path}.taskId`, { required: true, max: 200 });
+    if (taskIds.has(session.taskId)) fail('learning.sessions contains duplicate task identifiers.');
+    taskIds.add(session.taskId);
+    text(session.unitId, `${path}.unitId`, { max: 200 });
+    choice(session.stage, `${path}.stage`, ['intro', 'learn', 'practice', 'check', 'review', 'done'], { optional: false });
+    number(session.questionIndex, `${path}.questionIndex`, 0, 99, { optional: false, integer: true });
+    for (const key of ['answers', 'reviewAnswers', 'mistakes', 'checks']) {
+      if (!object(session[key]) || Object.keys(session[key]).length > 100) fail(`${path}.${key} must be a supported answer map.`);
+      for (const [questionId, answer] of Object.entries(session[key])) {
+        text(questionId, `${path}.${key} question id`, { required: true, max: 200 });
+        if (key === 'checks') choice(answer, `${path}.${key}.${questionId}`, ['again', 'hard', 'good'], { optional: false });
+        else text(answer, `${path}.${key}.${questionId}`, { max: key === 'mistakes' ? 2000 : 5000 });
+      }
+    }
+    stringList(session.revealed, `${path}.revealed`, { optional: false, max: 100, itemMax: 200, unique: true });
+    for (const key of ['startedAt', 'completedAt', 'updatedAt']) timestamp(session[key], `${path}.${key}`);
+  }, { optional: true, max: 1000 });
   list(value.attempts, 'learning.attempts', (attempt, path) => {
     for (const field of ['taskId', 'subjectId', 'questionId']) text(attempt[field], `${path}.${field}`, { max: 200 });
     text(attempt.topic, `${path}.topic`, { required: true, max: 200 });
@@ -580,7 +611,7 @@ function assertRetained(source, normalized, legacy = false) {
     if (source.schedule.cycleAnchor !== undefined) assertNewDataRetained(source.schedule.cycleAnchor, normalized.schedule.cycleAnchor, 'schedule.cycleAnchor');
     if (source.schedule.lessons !== undefined) assertNewDataRetained(source.schedule.lessons, normalized.schedule.lessons, 'schedule.lessons');
     for (const [collection, keys] of [
-      ['subjects', ['grading', 'priority', 'difficulty']],
+      ['subjects', ['grading', 'priority', 'difficulty', 'forecast']],
       ['grades', ['semester', 'weight', 'type']],
       ['activities', ['evidenceStatus', 'evidence', 'projectUrl']],
       ['universities', ['requirementsStatus', 'requirementsSource', 'requirementsCheckedDate']],

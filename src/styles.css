@@ -1,5 +1,5 @@
 :root {
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'DM Sans', 'Segoe UI', sans-serif;
   color: #202530; background: #f8f9fb; font-synthesis: none; text-rendering: optimizeLegibility;
   --bg:#f8f9fb; --surface:#fff; --surface-alt:#f3f5f8; --ink:#202530; --muted:#707987; --line:#e6e9ef;
   --accent:#435dda; --accent-soft:#eef1ff; --accent-ink:#354bb7; --on-accent:#fff; --success:#327e69; --success-soft:#edf7f2; --danger:#b54450;
@@ -31,8 +31,8 @@ fieldset { padding:0; margin:0; border:0; min-width:0; }
 .app-shell { min-height:100dvh; }
 .desktop-sidebar { display:none; }
 .main-content { max-width:800px; margin:auto; padding: max(18px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) calc(110px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left)); }
-.mobile-brand { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0 16px; }
-.brand { display:inline-flex; align-items:center; gap:8px; color:var(--ink); font-size:1.0625rem; font-weight:700;letter-spacing:-.4px; }
+.mobile-brand { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;padding:2px 0 16px; }
+.brand { white-space:nowrap;display:inline-flex; align-items:center; gap:8px; color:var(--ink); font-size:1.0625rem; font-weight:700;letter-spacing:-.4px; }
 .brand svg { color:var(--accent); }
 .mobile-brand > span { font-size:0.6875rem; color:var(--muted); }
 .stack { display:flex; flex-direction:column; gap:20px; min-width:0; }
@@ -419,7 +419,7 @@ input::-webkit-datetime-edit { display:inline-flex;max-width:100%;padding:0; }
 .storage-notice > button + button { margin-left:14px; }
 .tabs-scroll > button { min-width:44px;flex:0 0 auto; }
 .stats-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,5.5rem),1fr)); }
-.bottom-nav > button { min-width:0;overflow-wrap:anywhere; }
+.bottom-nav > button { min-width:0;overflow-wrap:anywhere;hyphens:auto; }
 .card h1,.card h2,.card h3,.modal-header h2 { overflow-wrap:anywhere; }
 .section-heading { flex-wrap:wrap; }
 .section-heading > div { flex:1 1 8rem; }
